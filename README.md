@@ -74,4 +74,5 @@ Check out the interactive playground and full documentation at **[flare.larvance
 
 ## Acknowledgements
 
-> AI assistance was used in creating the documentation and minimally in the source code.
+> [!NOTE]
+> AI assistance was used in creating the documentation, and specifically for code completion within the source code.
