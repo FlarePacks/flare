@@ -69,3 +69,9 @@ flare main.py --run
 Ready to unleash the full power of Python in Minecraft? 
 
 Check out the interactive playground and full documentation at **[flare.larvance.com](https://flare.larvance.com)**!
+
+---
+
+## Acknowledgements
+
+> AI assistance was used in creating the documentation and minimally in the source code.
