@@ -212,9 +212,61 @@ def _eval_to_bool_score(node):
     return dest
 
 
+SCORE_MATCH_RE = re.compile(r"^(if|unless)\s+score\s+(.+?)\s+matches\s+(.+)$")
+
+
+def parse_range(range_str: str) -> tuple[float, float]:
+    if ".." in range_str:
+        parts = range_str.split("..")
+        low = int(parts[0]) if parts[0] else float("-inf")
+        high = int(parts[1]) if parts[1] else float("inf")
+    else:
+        val = int(range_str)
+        low, high = val, val
+    return low, high
+
+
+def format_range(low: float, high: float) -> str:
+    if low == high:
+        return str(int(low))
+    low_str = str(int(low)) if low != float("-inf") else ""
+    high_str = str(int(high)) if high != float("inf") else ""
+    return f"{low_str}..{high_str}"
+
+
+def merge_score_match_conditions(conds: list[str]) -> list[str]:
+    score_ranges = {}
+    other_conds = []
+
+    for cond in conds:
+        match = SCORE_MATCH_RE.match(cond)
+        if match and match.group(1) == "if":
+            kw, score_addr, r_str = match.groups()
+            low, high = parse_range(r_str)
+            if score_addr in score_ranges:
+                old_low, old_high = score_ranges[score_addr]
+                new_low = max(old_low, low)
+                new_high = min(old_high, high)
+                score_ranges[score_addr] = (new_low, new_high)
+            else:
+                score_ranges[score_addr] = (low, high)
+        else:
+            other_conds.append(cond)
+
+    result = []
+    for score_addr, (low, high) in score_ranges.items():
+        r_fmt = format_range(low, high)
+        result.append(f"if score {score_addr} matches {r_fmt}")
+
+    return result + other_conds
+
+
 def _flatten_and(node, invert=False):
     if hasattr(node, "__branch__"):
-        return node.__branch__(invert)
+        conds = node.__branch__(invert)
+        if not invert:
+            return merge_score_match_conditions(conds)
+        return conds
 
     dest = _eval_to_bool_score(node)
     keyword = "unless" if invert else "if"
