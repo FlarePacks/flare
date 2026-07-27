@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/public/assets/icon_transparent.png" width="200" alt="Flare Logo">
+  <img src="assets/icon_transparent.png" width="200" alt="Flare Logo">
   <h1>Flare 🔥</h1>
   <p><b>Programmatic Minecraft Datapacks in Python</b></p>
   <p>Write Minecraft logic using full Python power: scores, NBT, execute chains, recursion, and more. Compile to optimized datapacks instantly.</p>
