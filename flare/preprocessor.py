@@ -301,6 +301,19 @@ class FlareTransformer(ast.NodeTransformer):
 
     def visit_Compare(self, node):
         self.generic_visit(node)
+        if len(node.ops) > 1:
+            comps = []
+            curr_left = node.left
+            for op, comp in zip(node.ops, node.comparators):
+                single_comp = ast.Compare(left=curr_left, ops=[op], comparators=[comp])
+                ast.copy_location(single_comp, node)
+                comps.append(single_comp)
+                curr_left = comp
+
+            bool_op = ast.BoolOp(op=ast.And(), values=comps)
+            ast.copy_location(bool_op, node)
+            return self.visit(bool_op)
+
         if len(node.ops) == 1:
             if isinstance(node.ops[0], ast.In):
                 call_expr = ast.Call(func=ast.Name(id="_flare_in", ctx=ast.Load()),
