@@ -484,61 +484,6 @@ COMMAND_KEYWORDS_SET = set(COMMAND_KEYWORDS.split("|"))
 COMMAND_RE = re.compile(r"^(\s*)(/?(?:" + COMMAND_KEYWORDS + r")\b|/\S*)(.*)$")
 
 
-def process_nbt_literals(source: str) -> str:
-    out = []
-    i = 0
-    n = len(source)
-    while i < n:
-        if source[i:i + 3] == "nbt":
-            if i == 0 or not (source[i - 1].isalnum() or source[i - 1] == "_"):
-                j = i + 3
-                while j < n and source[j] in " \t\r\n":
-                    j += 1
-                if j < n and source[j] in "{[":
-                    bracket_count = 1
-                    curr = j + 1
-                    while curr < n and bracket_count > 0:
-                        c = source[curr]
-                        if c in "\"'":
-                            quote = c
-                            curr += 1
-                            while curr < n:
-                                if source[curr] == "\\":
-                                    curr += 2
-                                    continue
-                                if source[curr] == quote:
-                                    curr += 1
-                                    break
-                                curr += 1
-                            continue
-                        if c in "{[(":
-                            bracket_count += 1
-                        elif c in "}])":
-                            bracket_count -= 1
-                        curr += 1
-
-                    if bracket_count == 0:
-                        nbt_str = source[j:curr]
-                        if nbt_str.startswith("["):
-                            inner = nbt_str[1:-1].strip()
-                            flare_types = [t for t in dir(flare) if not t.startswith("_")]
-                            if inner in ("int", "float", "str", "bool", "list", "dict", "nbt", "score",
-                                         "fixed") or inner in flare_types or inner.startswith(
-                                "list[") or inner.startswith("array[") or inner.startswith("dict[") or inner.startswith(
-                                "compound[") or inner.isidentifier():
-                                out.append(source[i:curr])
-                                i = curr
-                                continue
-
-                        safe_nbt = nbt_str.replace('"', '\\"')
-                        out.append(f'interpolate_command("""{safe_nbt}""", locals(), globals())')
-                        i = curr
-                        continue
-        out.append(source[i])
-        i += 1
-    return "".join(out)
-
-
 def evaluate_implicit_coord(seq) -> bool:
     if not seq:
         return False
@@ -587,9 +532,7 @@ def evaluate_implicit_coord(seq) -> bool:
 
 
 def preprocess_minecraft_commands(source: str) -> str:
-    source = process_nbt_literals(source)
     source = re.sub(r'import\s+([a-zA-Z0-9_]+:[a-zA-Z0-9_/]+)\s+as\s+([a-zA-Z0-9_]+)', r'\2 = Function("\1")', source)
-    source = source
     lines = source.split("\n")
 
     skip_lines = set()
@@ -682,6 +625,7 @@ def preprocess_minecraft_commands(source: str) -> str:
         i += 1
 
     intermediate_source = "\n".join(lines)
+    intermediate_source = re.sub(r'(?<![0-9a-zA-Z_])0([bB])(?![01a-fA-F])', r'snbt(0, "\1")', intermediate_source)
 
     try:
         tokens = list(tokenize.generate_tokens(io.StringIO(intermediate_source).readline))
@@ -690,8 +634,43 @@ def preprocess_minecraft_commands(source: str) -> str:
 
     out_tokens = []
     i = 0
+    nbt_depths = []
     while i < len(tokens):
         tok = tokens[i]
+
+        if tok.type == tokenize.NAME and tok.string == "nbt":
+            j = i + 1
+            while j < len(tokens) and tokens[j].type in (tokenize.NL, tokenize.NEWLINE, tokenize.INDENT,
+                                                         tokenize.DEDENT):
+                j += 1
+            if j < len(tokens) and tokens[j].type == tokenize.OP and tokens[j].string == "{":
+                out_tokens.append((tokenize.NAME, "nbt"))
+                out_tokens.append((tokenize.OP, "("))
+                nbt_depths.append(0)
+                i = j
+                tok = tokens[i]
+
+        if nbt_depths:
+            if tok.type == tokenize.OP and tok.string == "{":
+                nbt_depths[-1] += 1
+            elif tok.type == tokenize.OP and tok.string == "}":
+                nbt_depths[-1] -= 1
+                if nbt_depths[-1] == 0:
+                    nbt_depths.pop()
+                    out_tokens.append((tok.type, tok.string))
+                    out_tokens.append((tokenize.OP, ")"))
+                    i += 1
+                    continue
+
+        if nbt_depths and tok.type == tokenize.NAME:
+            j = i + 1
+            while j < len(tokens) and tokens[j].type in (tokenize.NL, tokenize.NEWLINE, tokenize.INDENT,
+                                                         tokenize.DEDENT):
+                j += 1
+            if j < len(tokens) and tokens[j].type == tokenize.OP and tokens[j].string == ":":
+                out_tokens.append((tokenize.STRING, f'"{tok.string}"'))
+                i += 1
+                continue
 
         if tok.type == tokenize.NAME and tok.string in ("success", "store"):
             j = i + 1
@@ -753,46 +732,18 @@ def preprocess_minecraft_commands(source: str) -> str:
                         i = curr
                         continue
 
-        if tok.type == tokenize.NAME and tok.string == "nbt":
-            j = i + 1
-            while j < len(tokens) and tokens[j].type in (tokenize.NL, tokenize.NEWLINE, tokenize.INDENT,
-                                                         tokenize.DEDENT):
-                j += 1
-            if j < len(tokens) and tokens[j].type == tokenize.OP and tokens[j].string == "(":
-                k = j + 1
-                while k < len(tokens) and tokens[k].type in (tokenize.NL, tokenize.NEWLINE, tokenize.INDENT,
-                                                             tokenize.DEDENT):
-                    k += 1
-                if k < len(tokens) and tokens[k].type == tokenize.OP and tokens[k].string in ("{", "["):
-                    bracket_count = 1
-                    curr = k + 1
-                    while curr < len(tokens) and bracket_count > 0:
-                        inner_tok = tokens[curr]
-                        if inner_tok.type == tokenize.OP:
-                            if inner_tok.string in ("{", "[", "("):
-                                bracket_count += 1
-                            elif inner_tok.string in ("}", "]", ")"):
-                                bracket_count -= 1
-                        curr += 1
-
-                    if bracket_count == 0:
-                        start_row, start_col = tokens[k].start
-                        end_row, end_col = tokens[curr - 1].end
-                        lines_arr = intermediate_source.split("\n")
-
-                        if start_row == end_row:
-                            nbt_str = lines_arr[start_row - 1][start_col:end_col]
-                        else:
-                            parts = [lines_arr[start_row - 1][start_col:]]
-                            for r in range(start_row, end_row - 1):
-                                parts.append(lines_arr[r])
-                            parts.append(lines_arr[end_row - 1][:end_col])
-                            nbt_str = " ".join(p.strip() for p in parts if p.strip())
-
-                        out_tokens.append((tokenize.NAME, "nbt"))
+        if tok.type == tokenize.NUMBER:
+            if i + 1 < len(tokens):
+                next_tok = tokens[i + 1]
+                if next_tok.type == tokenize.NAME and tok.end == next_tok.start:
+                    if next_tok.string in "bBsSlLfFdD":
+                        out_tokens.append((tokenize.NAME, "snbt"))
                         out_tokens.append((tokenize.OP, "("))
-                        out_tokens.append((tokenize.STRING, f"'''{nbt_str}'''"))
-                        i = curr
+                        out_tokens.append((tokenize.NUMBER, tok.string))
+                        out_tokens.append((tokenize.OP, ","))
+                        out_tokens.append((tokenize.STRING, f'"{next_tok.string}"'))
+                        out_tokens.append((tokenize.OP, ")"))
+                        i += 2
                         continue
 
         if tok.type == tokenize.NAME and tok.string.startswith("b"):

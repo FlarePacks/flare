@@ -10,6 +10,7 @@ from .nbt import nbt, struct
 from .objective import Objective
 from .score import score, fixed, getscore, INT32_LIMIT
 from .selector import selector
+from .snbt import snbt
 from .storage import _Storage
 from ..types import byte, boolean, short, long, double, array, compound
 
@@ -30,6 +31,6 @@ nbtintarray = nbt[array[int]]
 nbtlongarray = nbt[array[long]]
 
 __all__ = ["bigscore", "bigfixed", "fail", "complex", "UnsupportedOperandError", "BinaryOp", "UnaryOp", "macro", "ref",
-           "float32", "float64", "nbt", "struct", "Objective", "score", "fixed", "getscore", "INT32_LIMIT", "selector",
-           "storage", "nbtbyte", "nbtbool", "nbtshort", "nbtint", "nbtlong", "nbtfloat", "nbtdouble", "nbtstr",
-           "nbtlist", "nbtcompound", "nbtbytearray", "nbtintarray", "nbtlongarray", "block", "item"]
+           "float32", "float64", "nbt", "struct", "snbt", "Objective", "score", "fixed", "getscore", "INT32_LIMIT",
+           "selector", "storage", "nbtbyte", "nbtbool", "nbtshort", "nbtint", "nbtlong", "nbtfloat", "nbtdouble",
+           "nbtstr", "nbtlist", "nbtcompound", "nbtbytearray", "nbtintarray", "nbtlongarray", "block", "item"]

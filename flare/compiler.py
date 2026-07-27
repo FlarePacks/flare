@@ -197,7 +197,7 @@ def _eval_to_bool_score(node):
         _runcmd(f"execute if score {addr(sub_dest)} matches 0 run scoreboard players set {addr(dest)} 1")
         return dest
 
-    if isinstance(node, (BinaryOp, UnaryOp)):
+    if hasattr(node, "_compile_into"):
         t = score(addr=f"#b{ctx.next_temp_id()}")
         node._compile_into(t)
         _runcmd(f"execute unless score {addr(t)} matches 0 run scoreboard players set {addr(dest)} 1")

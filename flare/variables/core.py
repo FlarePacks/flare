@@ -644,8 +644,6 @@ class _Ref(Generic[T]):
         return self._target.__class__
 
     def __icopy__(self, varid: str):
-        if hasattr(self._target, "__icopy__"):
-            return self._target.__icopy__(varid)
         return self._target
 
     def __getattr__(self, item):
@@ -657,55 +655,84 @@ class _Ref(Generic[T]):
     def __getitem__(self, item):
         return self._target[item]
 
+    def __contains__(self, item):
+        if hasattr(self._target, "__contains__"):
+            return self._target.__contains__(item)
+        if hasattr(self._target, "__in__"):
+            return self._target.__in__(item)
+        raise TypeError(f"'{type(self._target).__name__}' object is not iterable")
+
     def __str__(self):
         return str(self._target)
 
     def __repr__(self):
         return repr(self._target)
 
-    def __add__(self, other): return self._target + other
+    def __add__(self, other):
+        return self._target + other
 
-    def __radd__(self, other): return other + self._target
+    def __radd__(self, other):
+        return other + self._target
 
-    def __sub__(self, other): return self._target - other
+    def __sub__(self, other):
+        return self._target - other
 
-    def __rsub__(self, other): return other - self._target
+    def __rsub__(self, other):
+        return other - self._target
 
-    def __mul__(self, other): return self._target * other
+    def __mul__(self, other):
+        return self._target * other
 
-    def __rmul__(self, other): return other * self._target
+    def __rmul__(self, other):
+        return other * self._target
 
-    def __truediv__(self, other): return self._target / other
+    def __truediv__(self, other):
+        return self._target / other
 
-    def __rtruediv__(self, other): return other / self._target
+    def __rtruediv__(self, other):
+        return other / self._target
 
-    def __mod__(self, other): return self._target % other
+    def __mod__(self, other):
+        return self._target % other
 
-    def __rmod__(self, other): return other % self._target
+    def __rmod__(self, other):
+        return other % self._target
 
-    def __neg__(self): return -self._target
+    def __neg__(self):
+        return -self._target
 
-    def __pos__(self): return +self._target
+    def __pos__(self):
+        return +self._target
 
-    def __eq__(self, other): return self._target == other
+    def __eq__(self, other):
+        return self._target == other
 
-    def __ne__(self, other): return self._target != other
+    def __ne__(self, other):
+        return self._target != other
 
-    def __lt__(self, other): return self._target < other
+    def __lt__(self, other):
+        return self._target < other
 
-    def __le__(self, other): return self._target <= other
+    def __le__(self, other):
+        return self._target <= other
 
-    def __gt__(self, other): return self._target > other
+    def __gt__(self, other):
+        return self._target > other
 
-    def __ge__(self, other): return self._target >= other
+    def __ge__(self, other):
+        return self._target >= other
 
-    def __and__(self, other): return self._target & other
+    def __and__(self, other):
+        return self._target & other
 
-    def __or__(self, other): return self._target | other
+    def __or__(self, other):
+        return self._target | other
 
-    def __invert__(self): return ~self._target
+    def __invert__(self):
+        return ~self._target
 
-    def __abs__(self): return abs(self._target)
+    def __abs__(self):
+        return abs(self._target)
 
 
 def ref(target: T) -> T:
