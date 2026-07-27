@@ -292,7 +292,7 @@ def combine_execute(prefix: str, cmd: str) -> str:
     return res
 
 
-def runcommand(command: str, local_vars=None, global_vars=None, validation: str = None):
+def runcommand(command: str, local_vars=None, global_vars=None, validation: str | None = None):
     dynamic_macros = []
 
     if "$(" in command and not command.startswith("$"):
@@ -320,7 +320,7 @@ def runcommand(command: str, local_vars=None, global_vars=None, validation: str 
     _runcmd(command, validation=validation)
 
 
-def _runcmd(command: str, validation: str = None):
+def _runcmd(command: str, validation: str | None = None):
     command = _optimize_execute(command)
 
     if validation is None:
@@ -517,10 +517,8 @@ def export(func=None, *, name=None, append=False, returns=None):
     has_returns[func_name] = False
 
     global _in_recursive_context, _logical_func
-    prev_recursive = _in_recursive_context
     _in_recursive_context = is_recursive
 
-    prev_logical = _logical_func
     _logical_func = func_name
 
     class ProxyFunction:
@@ -535,6 +533,8 @@ def export(func=None, *, name=None, append=False, returns=None):
                 return return_targets[func_name]
 
             ret_anno = return_types.get(func_name, sig.return_annotation)
+            if ret_anno in (None, type(None), inspect.Signature.empty):
+                return None
             if ret_anno == int or ret_anno == "int":
                 raise TypeError(f"Cannot access .returns on function '{func_name}' because it returns a raw int.")
 
@@ -589,7 +589,7 @@ def export(func=None, *, name=None, append=False, returns=None):
             ret_anno = return_types.get(func_name, sig.return_annotation)
             if ret_anno == "UNKNOWN":
                 return "UNKNOWN_RETURN"
-            elif ret_anno is not inspect.Signature.empty and ret_anno is not None:
+            elif ret_anno is not inspect.Signature.empty and ret_anno is not None and ret_anno != type(None):
                 if ret_anno == int or ret_anno == "int":
                     return IntReturn(func_name)
                 elif hasattr(ret_anno, "__name__") and ret_anno.__name__ in ("score", "fixed", "_PrecisionScore"):
@@ -604,6 +604,7 @@ def export(func=None, *, name=None, append=False, returns=None):
                     _runcmd(_emit_data_modify_from(addr(temp_ret), "set",
                                                    f"storage {returns_storage} {func_name.replace(':', '_')}"))
                     return temp_ret
+            return None
 
         def __call__(self, *args, **call_kwargs):
             global _temp_id

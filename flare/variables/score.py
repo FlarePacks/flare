@@ -155,8 +155,10 @@ class score(FlareValue):
             _runcmd(f"execute store result score {addr(self)} run data get {addr(other)}{scale_str}")
             return self
         if isinstance(other, score):
-            _runcmd(f"scoreboard players operation {addr(self)} = {addr(other)}")
-            self *= other._multiplier / self._multiplier
+            if addr(self) != addr(other):
+                _runcmd(f"scoreboard players operation {addr(self)} = {addr(other)}")
+            if self._multiplier != other._multiplier:
+                self *= other._multiplier / self._multiplier
             return self
         return self._try_binary("__iset__", "=", other, (float, int, score, nbt))
 

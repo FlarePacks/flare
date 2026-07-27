@@ -11,7 +11,7 @@ from .core import _Ref as _ref
 from .score import score
 from .string import NBTStringMethods
 from .. import context as ctx
-from ..context import _runcmd
+from ..context import _runcmd, _emit_data_modify_from
 from ..types import NBTType, _nbt_inner_mapping
 from ..types import array
 
@@ -1269,7 +1269,8 @@ class nbt(FlareValue, NBTStringMethods):
         if isinstance(other, nbt):
             if (self._type is None or other._type is None or self._type == other._type or (
                     self.is_floaty() and other.is_integer())):
-                _runcmd(_emit_data_modify_from(addr(self), "set", addr(other)))
+                if addr(self) != addr(other):
+                    _runcmd(_emit_data_modify_from(addr(self), "set", addr(other)))
                 return self
         if self.is_number():
             exp_type = (float, int, score, nbt)

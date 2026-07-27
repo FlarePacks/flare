@@ -41,16 +41,20 @@ def lazify(temp="#temp", datatype=None, self=True, copy=None):
                     return dest
 
                 def make_copy(varid):
+                    from .score import score, vars_obj
                     if copy is not None:
                         return copy(obj_or_arg, varid)
-                    if hasattr(obj_or_arg, "__icopy__"):
-                        if (datatype is None or getattr(obj_or_arg, "_type", None) == datatype):
-                            return obj_or_arg.__icopy__(varid)
                     t = alloc_temp()
                     if hasattr(t, "_parse_addr"):
-                        t._parse_addr(f"storage {ctx._current_namespace}:vars {varid}")
+                        if isinstance(t, score):
+                            t._parse_addr(f"{varid} {vars_obj}")
+                        else:
+                            t._parse_addr(f"storage {ctx._current_namespace}:vars {varid}")
                     else:
-                        t._addr = f"storage {ctx._current_namespace}:vars {varid}"
+                        if isinstance(t, score):
+                            t._addr = f"{varid} {vars_obj}"
+                        else:
+                            t._addr = f"storage {ctx._current_namespace}:vars {varid}"
                     return t
 
                 return obj_or_arg._lazify(eval_func, alloc_temp, make_copy, op_name=func.__name__,
@@ -75,13 +79,20 @@ def lazify(temp="#temp", datatype=None, self=True, copy=None):
                     return dest
 
                 def make_copy(varid):
+                    from .score import score, vars_obj
                     if copy is not None:
                         return copy(varid)
                     t = alloc_temp()
                     if hasattr(t, "_parse_addr"):
-                        t._parse_addr(f"storage {ctx._current_namespace}:vars {varid}")
+                        if isinstance(t, score):
+                            t._parse_addr(f"{varid} {vars_obj}")
+                        else:
+                            t._parse_addr(f"storage {ctx._current_namespace}:vars {varid}")
                     else:
-                        t._addr = f"storage {ctx._current_namespace}:vars {varid}"
+                        if isinstance(t, score):
+                            t._addr = f"{varid} {vars_obj}"
+                        else:
+                            t._addr = f"storage {ctx._current_namespace}:vars {varid}"
                     return t
 
                 return LazyOp(None, eval_func, alloc_temp, make_copy, op_name=func.__name__, op_args=(args, kwargs))
@@ -244,7 +255,7 @@ class FlareValue(ABC, metaclass=FlareClassMeta):
 
     def __bool__(self):
         raise TypeError(
-            "Flare variables cannot be evaluated as Pythnnot be evaluated as Python booleans at compile-time. Use expand(condition) for dynamic conditionals or check if a built-in Python function is attempting native comparisons.")
+            "Flare variables cannot be evaluated as Python booleans at compile-time. Use expand(condition) for dynamic conditionals or check if a built-in Python function is attempting native comparisons.")
 
     def __implicit__(self, target_types):
         raise NotImplementedError()
@@ -618,7 +629,7 @@ class macro:
 
 
 def is_lazy(obj):
-    return (hasattr(type(obj), "_compile_into") and getattr(type(obj), "_compile_into") is not FlareValue._compile_into)
+    return hasattr(type(obj), "_compile_into") and getattr(type(obj), "_compile_into") is not FlareValue._compile_into
 
 
 T = TypeVar("T")
