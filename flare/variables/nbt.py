@@ -9,6 +9,7 @@ from .core import LazyOp
 from .core import UnsupportedOperandError, BinaryOp, addr, FlareValue, is_lazy, lazify
 from .core import _Ref as _ref
 from .score import score
+from .snbt import _snbt
 from .string import NBTStringMethods
 from .. import context as ctx
 from ..context import _runcmd, _emit_data_modify_from
@@ -55,6 +56,135 @@ def _is_runtime(val) -> bool:
     return False
 
 
+def _is_snbt_literal(item) -> bool:
+    if isinstance(item, (int, float, str, bool, _snbt)):
+        return True
+    if isinstance(item, (list, tuple)):
+        return all(_is_snbt_literal(x) for x in item)
+    if isinstance(item, dict):
+        return all(isinstance(k, str) and _is_snbt_literal(v) for k, v in item.items())
+    if isinstance(item, nbt):
+        return item._addr is None and item._value_to_set is not None and _is_snbt_literal(item._value_to_set)
+    return False
+
+
+def _to_snbt_obj(item):
+    if isinstance(item, (int, float, str, bool, _snbt)):
+        return item
+    if isinstance(item, (list, tuple)):
+        return [_to_snbt_obj(x) for x in item]
+    if isinstance(item, dict):
+        return {k: _to_snbt_obj(v) for k, v in item.items()}
+    if isinstance(item, nbt) and item._value_to_set is not None:
+        return _to_snbt_obj(item._value_to_set)
+    return item
+
+
+def _get_snbt_target_path(container: nbt, item) -> str:
+    item = _to_snbt_obj(item)
+    prefix = ""
+    suffix = ""
+    if container._type == NBTType.ByteArray:
+        prefix = "B;"
+        suffix = "b" if isinstance(item, int) else ""
+    elif container._type == NBTType.IntArray:
+        prefix = "I;"
+    elif container._type == NBTType.LongArray:
+        prefix = "L;"
+        suffix = "l" if isinstance(item, int) else ""
+
+    item_snbt = _snbt_literal(item)
+    if suffix and not item_snbt.endswith(suffix):
+        item_snbt += suffix
+
+    arr_str = f"[{prefix}{item_snbt}]"
+
+    base_target = f"{container._target_type} {container._target}"
+
+    if not container._path:
+        return f"{base_target} {arr_str}"
+
+    parts = container._path.split(".")
+    if len(parts) > 1:
+        parent_path = ".".join(parts[:-1])
+        prop_name = parts[-1]
+        return f"{base_target} {parent_path}{{{prop_name}:{arr_str}}}"
+    else:
+        prop_name = parts[0]
+        return f"{base_target} {{{prop_name}:{arr_str}}}"
+
+
+class NBTInOp(FlareValue):
+    def __init__(self, container: nbt, item, inverted: bool = False):
+        self.container = container
+        self.item = item
+        self.inverted = inverted
+
+    def __invert__(self):
+        return NBTInOp(self.container, self.item, not self.inverted)
+
+    def __branch__(self, invert=False):
+        from ..compiler import _eval_to_bool_score
+        effective_invert = self.inverted ^ invert
+        kw = "unless" if effective_invert else "if"
+
+        if self.container._type in (NBTType.ByteArray, NBTType.IntArray, NBTType.LongArray):
+            dest = _eval_to_bool_score(self)
+            score_kw = "unless" if effective_invert else "if"
+            return [f"{score_kw} score {addr(dest)} matches 1"]
+
+        if self.container._type == NBTType.Compound:
+            if isinstance(self.item, str):
+                full_path = f"{self.container._path}.{self.item}" if self.container._path else self.item
+                return [f"{kw} data {self.container._target_type} {self.container._target} {full_path}"]
+
+        if _is_snbt_literal(self.item):
+            target_path = _get_snbt_target_path(self.container, self.item)
+            return [f"{kw} data {target_path}"]
+
+        dest = _eval_to_bool_score(self)
+        score_kw = "unless" if effective_invert else "if"
+        return [f"{score_kw} score {addr(dest)} matches 1"]
+
+    def _compile_into(self, dest):
+        from ..context import _runcmd
+        from .score import score, addr
+
+        if self.container._type in (NBTType.ByteArray, NBTType.IntArray, NBTType.LongArray):
+            return self.container._dynamic_in(self.item, dest=dest)
+
+        if self.container._type == NBTType.Compound and isinstance(self.item, str):
+            full_path = f"{self.container._path}.{self.item}" if self.container._path else self.item
+            if isinstance(dest, score):
+                _runcmd(
+                    f"execute store success score {addr(dest)} if data {self.container._target_type} {self.container._target} {full_path}")
+            else:
+                _runcmd(
+                    f"execute store success score #temp_{ctx.next_temp_id()} if data {self.container._target_type} {self.container._target} {full_path}")
+            return dest
+
+        if _is_snbt_literal(self.item):
+            target_path = _get_snbt_target_path(self.container, self.item)
+            if isinstance(dest, score):
+                _runcmd(f"execute store success score {addr(dest)} if data {target_path}")
+            else:
+                temp_s = score(addr=f"#in_succ_{ctx.next_temp_id()}")
+                _runcmd(f"execute store success score {addr(temp_s)} if data {target_path}")
+                dest.__iset__(temp_s)
+            return dest
+
+        return self.container._dynamic_in(self.item, dest=dest)
+
+    def __iset__(self, target):
+        self._compile_into(target)
+
+    def __icopy__(self, varid: str, is_recursive: bool = False):
+        from .score import score, vars_obj
+        dest = score(addr=f"{varid} {vars_obj}")
+        self._compile_into(dest)
+        return dest
+
+
 def _nbt_default_snbt(nbt_type) -> str:
     if nbt_type in (NBTType.Byte, NBTType.Boolean, NBTType.Short, NBTType.Int, NBTType.Long, NBTType.IntArray,
                     NBTType.ByteArray, NBTType.LongArray,):
@@ -72,6 +202,10 @@ def _nbt_default_snbt(nbt_type) -> str:
 
 def _snbt_literal(val) -> str:
     from .core import macro
+    if isinstance(val, _snbt):
+        return str(val)
+    if isinstance(val, nbt) and val._value_to_set is not None:
+        return _snbt_literal(val._value_to_set)
     if isinstance(val, macro):
         return f'"{str(val)}"'
     if isinstance(val, bool):
@@ -514,7 +648,10 @@ class nbt(FlareValue, NBTStringMethods):
         self._type = datatype
         self._type_name = getattr(datatype, "name",
                                   getattr(datatype, "__name__", "Unknown")) if datatype is not None else "Unknown"
-        self._value_to_set = value
+        if isinstance(value, str) and (value.startswith("{") or value.startswith("[")):
+            self._value_to_set = _snbt(value)
+        else:
+            self._value_to_set = value
         self._addr = None
         self._path = ""
         self._target = ""
@@ -1284,27 +1421,13 @@ class nbt(FlareValue, NBTStringMethods):
             raise UnsupportedOperandError(self, "=", other)
         return self._try_binary("__iset__", "=", other, exp_type)
 
-    @lazify(temp="#in_res_out", datatype=NBTType.Byte)
-    def __in__(self, item, *, dest=None):
+    def __contains__(self, item):
+        return self.__in__(item)
+
+    def _dynamic_in(self, item, *, dest=None):
         from .score import score
         from ..control_flow import _flare_if, _flare_while
         from ..context import _runcmd
-        from ..compiler import _flatten_and
-
-        if self._type == NBTType.String:
-            res = super().__in__(item)
-            if dest is not None:
-                dest[:] = 0
-                conds = _flatten_and(res)
-                if isinstance(dest, score):
-                    _runcmd(f"execute {' '.join(conds)} run scoreboard players set {addr(dest)} 1")
-                else:
-                    _runcmd(f"execute {' '.join(conds)} run data modify {addr(dest)} set value 1b")
-                return dest
-            return res
-
-        if self.is_number():
-            raise TypeError("Cannot use 'in' operator on numbers")
 
         if not isinstance(dest, score):
             dest = ctx.next_temp_score("in_res", value=0)
@@ -1338,6 +1461,31 @@ class nbt(FlareValue, NBTStringMethods):
         _flare_while(lambda: (length > 0) & (dest == 0), loop)
 
         return dest
+
+    def __in__(self, item, *, dest=None):
+        from .score import score
+        from ..context import _runcmd
+        from ..compiler import _flatten_and
+
+        if self._type == NBTType.String:
+            res = super().__in__(item)
+            if dest is not None:
+                dest[:] = 0
+                conds = _flatten_and(res)
+                if isinstance(dest, score):
+                    _runcmd(f"execute {' '.join(conds)} run scoreboard players set {addr(dest)} 1")
+                else:
+                    _runcmd(f"execute {' '.join(conds)} run data modify {addr(dest)} set value 1b")
+                return dest
+            return res
+
+        if self.is_number():
+            raise TypeError("Cannot use 'in' operator on numbers")
+
+        if dest is None and ((self._type == NBTType.Compound and isinstance(item, str)) or _is_snbt_literal(item)):
+            return NBTInOp(self, item)
+
+        return self._dynamic_in(item, dest=dest)
 
     def __iadd__(self, other):
         if self.is_number():

@@ -17,7 +17,8 @@ TOKEN_REGEX = re.compile(r'(?P<FSTRING>f\"(?:\\\\.|[^\\"])*\"|f\'(?:\\\\.|[^\\\'
                          r'(?P<WHITESPACE>\s+)')
 
 
-def interpolate_command(command: str, local_vars: dict, global_vars: dict, dynamic_macros: list = None) -> str:
+def interpolate_command(command: str, local_vars: dict, global_vars: dict, dynamic_macros: list = None,
+                        is_snbt: bool = False) -> str:
     global _macro_substituted
     from .context import next_temp_id
 
@@ -195,10 +196,15 @@ def interpolate_command(command: str, local_vars: dict, global_vars: dict, dynam
                 try:
                     eval_expr = re.sub(r'\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}', r'\1', expr)
                     eval_expr = re.sub(r'\$([a-zA-Z_][a-zA-Z0-9_]*)', r'\1', eval_expr)
+                    eval_expr = re.sub(r'(?<=[{\s,])([a-zA-Z_][a-zA-Z0-9_\-.]*)\s*:', r'"\1":', eval_expr)
                     val = eval(eval_expr, global_vars, local_vars)
                     if isinstance(val, (dict, list)) or (
                             hasattr(val, "_value_to_set") and isinstance(val._value_to_set, dict)):
                         output.append(format_val(val))
+                        _any_var_resolved = True
+                    elif isinstance(val, set) and len(val) == 1:
+                        elem = next(iter(val))
+                        output.append(format_val(elem))
                         _any_var_resolved = True
                     else:
                         output.append(expr)
@@ -214,5 +220,9 @@ def interpolate_command(command: str, local_vars: dict, global_vars: dict, dynam
 
     if not _any_var_resolved:
         _static_interp_cache[command] = (result, _macro_substituted)
+
+    if is_snbt:
+        from .variables.snbt import snbt
+        return snbt(result)
 
     return result
