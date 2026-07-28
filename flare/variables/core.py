@@ -799,7 +799,7 @@ class _LazyFunctionCall(FlareValue):
         from ..context import _runcmd
         if self.nbt is not None:
             if hasattr(self.nbt, "_addr") and self.nbt._addr:
-                _runcmd(f"function {self.name} with {self.nbt._addr}")
+                _runcmd(f"function {self.name} with {addr(self.nbt)}")
             else:
                 _runcmd(f"function {self.name} with {self.nbt}")
         else:
@@ -828,22 +828,23 @@ class _LazyFunctionCall(FlareValue):
             from .score import score
             from ..execute_modifiers import store_success
 
-            temp = score(addr=f"#succ_{next_temp_id()} {vars_obj}")
-            store_success(temp).__with__(self.__alone__)
-
+            temp_score = score(addr=f"#ret_{next_temp_id()} {vars_obj}")
+            store_success(temp_score).__with__(self.__alone__)
+            return temp_score.__branch__(invert)
+        else:
+            cmd = f"function {self.name}"
             if invert:
-                return [f"unless score {temp._addr} matches 1.."]
-            return [f"if score {temp._addr} matches 1.."]
-
-        cmd = f"function {self.name}"
-        if invert:
-            return [f"unless {cmd}"]
-        return [f"if {cmd}"]
+                return [f"unless {cmd}"]
+            return [f"if {cmd}"]
 
 
 class Function:
     def __init__(self, name: str):
         self.name = name
 
-    def __call__(self, nbt=None):
-        return _LazyFunctionCall(self.name, nbt)
+    def __call__(self, nbt=None, *, with_=None):
+        nbt_val = with_ if with_ is not None else nbt
+        return _LazyFunctionCall(self.name, nbt_val)
+
+    def with_(self, nbt_val):
+        return _LazyFunctionCall(self.name, nbt_val)
