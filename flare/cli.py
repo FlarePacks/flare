@@ -78,52 +78,46 @@ def _build_datapack_inner(file_path: str, cli_overrides: dict | None = None, bee
     p = Path(file_path).parent
     json_path = p / "flare.json"
 
+    from flare.config import load_config
+    raw_json_config = {}
     if json_path.exists():
         with open(json_path, "r") as f:
             try:
-                config = json.load(f)
+                raw_json_config = json.load(f)
             except json.JSONDecodeError as e:
                 print(f"\033[91mError: Invalid flare.json file.\033[0m")
                 print(f"\033[91m{e.msg} at line {e.lineno}, column {e.colno}\033[0m")
                 sys.exit(1)
-    else:
-        config = {"namespace": "flare", "pack_format": 15, "description": "A Flare datapack", "build_dir": ["dist"],
-                  "validation_level": "strict", "system_command_validation": "none"}
 
-    if cli_overrides:
-        config.update(cli_overrides)
+    try:
+        flare_cfg = load_config(raw_json_config, cli_overrides)
+    except ValueError as e:
+        print(f"\033[91mConfiguration Error: {e}\033[0m")
+        sys.exit(1)
 
-    pack_format = config.get("pack_format", 15)
-    if isinstance(pack_format, str):
-        ver = minecraft_version_to_pack_format(pack_format)
-        if ver is not None:
-            pack_format = ver
-        else:
-            try:
-                pack_format = float(pack_format)
-                if pack_format.is_integer(): pack_format = int(pack_format)
-            except ValueError:
-                pack_format = 15
-        config["pack_format"] = pack_format
+    config = flare_cfg.to_dict()
+    flare_cfg.apply_to_context(context)
 
     namespace = config.get("namespace", "flare")
+    pack_format = config.get("pack_format", 15)
+    from flare.utils import pack_format_to_minecraft_version
+    context.minecraft_version = pack_format_to_minecraft_version(pack_format)
 
-    build_dirs_raw = config.get("build_dir", ["dist"])
+    build_dirs_raw = raw_json_config.get("build_dir", cli_overrides.get("build_dir", ["dist"])) if isinstance(
+        raw_json_config, dict) else ["dist"]
     if isinstance(build_dirs_raw, str):
         build_dirs_raw = [build_dirs_raw]
     else:
         build_dirs_raw = list(build_dirs_raw)
 
-    if "out_dir" in config:
+    if "out_dir" in config and config["out_dir"]:
         if isinstance(config["out_dir"], list):
             build_dirs_raw = config["out_dir"]
         else:
             build_dirs_raw = [config["out_dir"]]
 
     resolved_build_dirs = resolve_build_targets(build_dirs_raw, p, namespace)
-
     if not resolved_build_dirs:
-        print("\033[91mNo valid output directories found. Defaulting to 'dist'.\033[0m")
         resolved_build_dirs = [p / "dist"]
 
     build_dir = None
@@ -138,17 +132,7 @@ def _build_datapack_inner(file_path: str, cli_overrides: dict | None = None, bee
                 break
 
     if build_dir is None:
-        if resolved_build_dirs:
-            build_dir = resolved_build_dirs[0]
-        else:
-            build_dir = p / "dist"
-
-    from flare.utils import pack_format_to_minecraft_version
-    context.validation_level = config.get("validation_level", "strict")
-    context.system_command_validation = config.get("system_command_validation", "none")
-    context.minecraft_version = pack_format_to_minecraft_version(pack_format)
-    context.nbt_schema_missing = config.get("nbt_schema_missing", "error")
-    context.config = config
+        build_dir = resolved_build_dirs[0] if resolved_build_dirs else p / "dist"
 
     context.reset_context()
     context._current_namespace = namespace
@@ -675,6 +659,8 @@ def main():
                         help="Set the validation level for internal system commands.")
     parser.add_argument("--no-cache", action="store_true", default=False,
                         help="Disable I/O cache, forcing all files to be rewritten.")
+    parser.add_argument("--type-narrowing", choices=["none", "warning", "strict"], default=None,
+                        help="Action when narrowing NBT type conversions (default: warning).")
     parser.add_argument("--autoreload", nargs="?", const=True, default=None,
                         help="Specify a world URI (e.g. world://my_world) to setup autoreload. Requires --watch.")
 
@@ -750,6 +736,12 @@ def main():
         if args.system_command_validation not in ("none", "warning", "strict"):
             print(
                 f"\033[91mInvalid system command validation level: {args.system_command_validation}. Must be one of 'none', 'warning', or 'strict'.\033[0m")
+            sys.exit(1)
+    if hasattr(args, "type_narrowing") and args.type_narrowing is not None:
+        cli_overrides["type_narrowing"] = args.type_narrowing
+        if args.type_narrowing not in ("none", "warning", "strict"):
+            print(
+                f"\033[91mInvalid type narrowing level: {args.type_narrowing}. Must be one of 'none', 'warning', or 'strict'.\033[0m")
             sys.exit(1)
     i = 0
     while i < len(unknown_args):

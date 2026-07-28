@@ -24,7 +24,7 @@ class FlareOptions(BaseModel):
     validation: Optional[Literal["none", "warning", "strict"]] = None
     system_command_validation: Optional[Literal["none", "warning", "strict"]] = None
     minecraft_version: Optional[str] = None
-    nbt_schema_missing: Optional[Literal["error", "warning", "ignore"]] = None
+    type_narrowing: Optional[Literal["none", "warning", "strict"]] = None
 
 
 def beet_default(ctx: Context) -> None:
@@ -65,11 +65,13 @@ def flare(ctx: Context, opts: FlareOptions) -> None:
         cli_overrides["minecraft_version"] = opts.minecraft_version
     if opts.nbt_schema_missing is not None:
         cli_overrides["nbt_schema_missing"] = opts.nbt_schema_missing
+    if opts.type_narrowing is not None:
+        cli_overrides["type_narrowing"] = opts.type_narrowing
 
     extra_opts = {}
     for key, value in opts.dict(exclude_unset=True).items():
         if key not in ("path", "namespace", "pack_format", "description", "validation", "system_command_validation",
-                       "minecraft_version", "nbt_schema_missing"):
+                       "minecraft_version", "nbt_schema_missing", "type_narrowing"):
             extra_opts[key] = value
 
     for key, value in extra_opts.items():

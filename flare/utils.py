@@ -6,10 +6,11 @@ from typing import List
 
 CACHE_FILE = Path.home() / ".flare" / "world_cache.json"
 
+
 def minecraft_version_to_pack_format(version: str) -> float | int | None:
     if str(version).isdigit():
         return None
-        
+
     try:
         parts = [int(p) for p in version.split(".") if p.isdigit()]
         if not parts:
@@ -57,8 +58,9 @@ def minecraft_version_to_pack_format(version: str) -> float | int | None:
                 return 107.1
     except Exception:
         pass
-    
+
     return None
+
 
 def pack_format_to_minecraft_version(pack_format: float | int) -> str:
     try:
@@ -86,6 +88,7 @@ def pack_format_to_minecraft_version(pack_format: float | int) -> str:
         return "26.2"
     except Exception:
         return "1.20.4"
+
 
 def get_minecraft_dir() -> Path:
     if sys.platform == "win32":
@@ -208,3 +211,36 @@ def resolve_build_targets(build_dirs: str | List[str], project_dir: str | Path, 
             print(f"\033[91mFailed to resolve build target '{d}': {e}\033[0m")
 
     return resolved
+
+
+def get_source_location_str() -> str:
+    frame = sys._getframe(1)
+    cwd = os.getcwd()
+    flare_dir = os.path.abspath(os.path.dirname(__file__))
+
+    while frame:
+        filename = frame.f_code.co_filename
+        if "__file__" in frame.f_globals:
+            user_file = frame.f_globals["__file__"]
+            if user_file and os.path.exists(user_file):
+                norm_user = os.path.abspath(user_file)
+                if not norm_user.startswith(flare_dir):
+                    try:
+                        rel_path = os.path.relpath(norm_user, cwd)
+                    except ValueError:
+                        rel_path = norm_user
+                    lineno = frame.f_lineno
+                    return f"{rel_path}:{lineno}:1: "
+
+        if not filename.startswith("<") and os.path.exists(filename):
+            norm_file = os.path.abspath(filename)
+            if not norm_file.startswith(flare_dir):
+                try:
+                    rel_path = os.path.relpath(norm_file, cwd)
+                except ValueError:
+                    rel_path = norm_file
+                lineno = frame.f_lineno
+                return f"{rel_path}:{lineno}:1: "
+
+        frame = frame.f_back
+    return ""

@@ -61,6 +61,31 @@ DensityFunction = Union[Union['NoiseRange', {'type': str}], Any]
 
 DensityFunctionRef = Union[Union[str, 'DensityFunction'], Any]
 
+class DistanceToPoint:
+    def __init__(
+            self,
+            point: Optional[Union[list[int], Any]] = None,
+            metric: Optional[Union[str, Any]] = None,
+            **kwargs
+    ):
+        self.components = {}
+        self.components.update(kwargs)
+        if point is not None:
+            self.components["point"] = point
+        if metric is not None:
+            self.components["metric"] = metric
+
+    def to_dict(self):
+        res = {}
+        for k, v in self.components.items():
+            if hasattr(v, 'to_dict'):
+                res[k] = v.to_dict()
+            elif isinstance(v, list):
+                res[k] = [x.to_dict() if hasattr(x, 'to_dict') else x for x in v]
+            else:
+                res[k] = v
+        return res
+
 class FindTopSurface:
     def __init__(
             self,
@@ -80,6 +105,43 @@ class FindTopSurface:
             self.components["lower_bound"] = lower_bound
         if cell_height is not None:
             self.components["cell_height"] = cell_height
+
+    def to_dict(self):
+        res = {}
+        for k, v in self.components.items():
+            if hasattr(v, 'to_dict'):
+                res[k] = v.to_dict()
+            elif isinstance(v, list):
+                res[k] = [x.to_dict() if hasattr(x, 'to_dict') else x for x in v]
+            else:
+                res[k] = v
+        return res
+
+class Gradient:
+    def __init__(
+            self,
+            axis: Optional[Union[str, Any]] = None,
+            tiling: Optional[Union[str, Any]] = None,
+            from_coordinate: Optional[Union[int, Any]] = None,
+            to_coordinate: Optional[Union[int, Any]] = None,
+            from_value: Optional[Union['NoiseRange', Any]] = None,
+            to_value: Optional[Union['NoiseRange', Any]] = None,
+            **kwargs
+    ):
+        self.components = {}
+        self.components.update(kwargs)
+        if axis is not None:
+            self.components["axis"] = axis
+        if tiling is not None:
+            self.components["tiling"] = tiling
+        if from_coordinate is not None:
+            self.components["from_coordinate"] = from_coordinate
+        if to_coordinate is not None:
+            self.components["to_coordinate"] = to_coordinate
+        if from_value is not None:
+            self.components["from_value"] = from_value
+        if to_value is not None:
+            self.components["to_value"] = to_value
 
     def to_dict(self):
         res = {}
@@ -151,7 +213,7 @@ class Lerp:
 class Noise:
     def __init__(
             self,
-            noise: Optional[Union[str, Any]] = None,
+            noise: Optional[Union['NoiseParametersRef', Any]] = None,
             xz_scale: Optional[Union[float, Any]] = None,
             y_scale: Optional[Union[float, Any]] = None,
             **kwargs
@@ -175,6 +237,8 @@ class Noise:
             else:
                 res[k] = v
         return res
+
+NoiseParametersRef = Union[Union[str, 'NoiseParameters'], Any]
 
 class OldBlendedNoise:
     def __init__(
@@ -223,6 +287,31 @@ class OneArgument:
             self.components["argument"] = argument
         if input is not None:
             self.components["input"] = input
+
+    def to_dict(self):
+        res = {}
+        for k, v in self.components.items():
+            if hasattr(v, 'to_dict'):
+                res[k] = v.to_dict()
+            elif isinstance(v, list):
+                res[k] = [x.to_dict() if hasattr(x, 'to_dict') else x for x in v]
+            else:
+                res[k] = v
+        return res
+
+class Pow:
+    def __init__(
+            self,
+            base: Optional[Union['DensityFunctionRef', Any]] = None,
+            exponent: Optional[Union['DensityFunctionRef', Any]] = None,
+            **kwargs
+    ):
+        self.components = {}
+        self.components.update(kwargs)
+        if base is not None:
+            self.components["base"] = base
+        if exponent is not None:
+            self.components["exponent"] = exponent
 
     def to_dict(self):
         res = {}
@@ -297,8 +386,8 @@ class Round:
 class Shift:
     def __init__(
             self,
-            argument: Optional[Union[str, Any]] = None,
-            noise: Optional[Union[str, Any]] = None,
+            argument: Optional[Union['NoiseParametersRef', Any]] = None,
+            noise: Optional[Union['NoiseParametersRef', Any]] = None,
             **kwargs
     ):
         self.components = {}
@@ -334,6 +423,34 @@ class ShiftedNoise(Noise):
             self.components["shift_y"] = shift_y
         if shift_z is not None:
             self.components["shift_z"] = shift_z
+
+    def to_dict(self):
+        res = {}
+        for k, v in self.components.items():
+            if hasattr(v, 'to_dict'):
+                res[k] = v.to_dict()
+            elif isinstance(v, list):
+                res[k] = [x.to_dict() if hasattr(x, 'to_dict') else x for x in v]
+            else:
+                res[k] = v
+        return res
+
+class Slice:
+    def __init__(
+            self,
+            axis: Optional[Union[str, Any]] = None,
+            coordinate: Optional[Union[int, Any]] = None,
+            input: Optional[Union['DensityFunctionRef', Any]] = None,
+            **kwargs
+    ):
+        self.components = {}
+        self.components.update(kwargs)
+        if axis is not None:
+            self.components["axis"] = axis
+        if coordinate is not None:
+            self.components["coordinate"] = coordinate
+        if input is not None:
+            self.components["input"] = input
 
     def to_dict(self):
         res = {}
@@ -474,7 +591,7 @@ class WeirdScaledSampler:
     def __init__(
             self,
             rarity_value_mapper: Optional[Union[str, Any]] = None,
-            noise: Optional[Union[str, Any]] = None,
+            noise: Optional[Union['NoiseParametersRef', Any]] = None,
             input: Optional[Union['DensityFunctionRef', Any]] = None,
             **kwargs
     ):
@@ -517,6 +634,25 @@ class YClampedGradient:
             self.components["from_value"] = from_value
         if to_value is not None:
             self.components["to_value"] = to_value
+
+    def to_dict(self):
+        res = {}
+        for k, v in self.components.items():
+            if hasattr(v, 'to_dict'):
+                res[k] = v.to_dict()
+            elif isinstance(v, list):
+                res[k] = [x.to_dict() if hasattr(x, 'to_dict') else x for x in v]
+            else:
+                res[k] = v
+        return res
+
+class NoiseParameters:
+    def __init__(
+            self,
+            **kwargs
+    ):
+        self.components = {}
+        self.components.update(kwargs)
 
     def to_dict(self):
         res = {}
