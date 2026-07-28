@@ -1876,6 +1876,85 @@ class nbt(FlareValue, NBTStringMethods):
         ctx._invoke_stdlib("__flare_stdlib__:__flare_string_macro", string_macro, with_=with_)
         return dest
 
+    @lazify("rev", datatype=lambda s: getattr(s, "_type", None))
+    def reverse(self, *, dest=None):
+        from ..control_flow import ScoreIfMatches
+        from .score import score
+        from ..types import NBTType
+
+        if self._type == NBTType.String:
+            _id = ctx.next_temp_id()
+            temp_str = nbt(addr=f"storage {ctx.temp_storage} rev_str_{_id}", datatype=NBTType.String)
+            temp_str[:] = self
+
+            dest[:] = ""
+
+            func_name = ctx.get_generated_func_name("rev_str")
+
+            char_temp = nbt(addr=f"storage {ctx.temp_storage} rev_char_{_id}", datatype=NBTType.String)
+
+            with ctx.push_context(func_name):
+                char_temp[:] = temp_str[0]
+                dest.prepend(char_temp)
+                temp_str[:] = temp_str[1:]
+
+                l_op = temp_str.__len__()
+                temp_len = score(addr=f"#rev_len_{_id}")
+                if hasattr(l_op, "_compile_into"):
+                    l_op._compile_into(temp_len)
+                else:
+                    temp_len[:] = l_op
+                ScoreIfMatches(temp_len, (1, float("inf"))).then(lambda: _runcmd(f"function {func_name}"))
+
+            l_op = temp_str.__len__()
+            temp_len = score(addr=f"#rev_len_{_id}")
+            if hasattr(l_op, "_compile_into"):
+                l_op._compile_into(temp_len)
+            else:
+                temp_len[:] = l_op
+            ScoreIfMatches(temp_len, (1, float("inf"))).then(lambda: _runcmd(f"function {func_name}"))
+
+            return dest
+
+        if not self.is_sequence():
+            raise TypeError(f"Cannot reverse non-sequence NBT object (type: {self._type}).")
+
+        self._check_addr()
+
+        _id = ctx.next_temp_id()
+
+        temp_list = nbt(addr=f"storage {ctx.temp_storage} rev_lst_{_id}", datatype=self._type)
+        temp_list[:] = self
+
+        _runcmd(f"data remove {addr(dest)}")
+
+        func_name = ctx.get_generated_func_name("rev_list")
+
+        with ctx.push_context(func_name):
+            _runcmd(_emit_data_modify_from(addr(dest), "prepend", f"{addr(temp_list)}[0]"))
+            _runcmd(f"data remove {addr(temp_list)}[0]")
+
+            l_op = temp_list.__len__()
+            temp_len = score(addr=f"#rev_len_{_id}")
+            if hasattr(l_op, "_compile_into"):
+                l_op._compile_into(temp_len)
+            else:
+                temp_len[:] = l_op
+            ScoreIfMatches(temp_len, (1, float("inf"))).then(lambda: _runcmd(f"function {func_name}"))
+
+        l_op = temp_list.__len__()
+        temp_len = score(addr=f"#rev_len_{_id}")
+        if hasattr(l_op, "_compile_into"):
+            l_op._compile_into(temp_len)
+        else:
+            temp_len[:] = l_op
+        ScoreIfMatches(temp_len, (1, float("inf"))).then(lambda: _runcmd(f"function {func_name}"))
+
+        return dest
+
+    def __reversed__(self):
+        return self.reverse()
+
     def remove(self):
         self._check_addr()
         _runcmd(f"data remove {addr(self)}")

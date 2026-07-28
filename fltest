@@ -32,7 +32,7 @@ echo "Running unit tests..."
 for test_file in examples/cli_test/test_*.py; do
     echo "Running $test_file..."
     output=$(flare "$test_file" --run=0 2>&1)
-    if echo "$output" | grep -qi "assert"; then
+    if echo "$output" | grep -qi "ASSERT FAILED\|AssertionError\|Exception\|Traceback"; then
         echo "Assertion failed in $test_file:"
         echo "$output"
         exit 1

@@ -60,6 +60,11 @@ class NBTStringSlice(FlareValue):
 
         item = self.slice_obj
         string_obj = self.string_obj
+        from .core import LazyOp
+        if isinstance(string_obj, LazyOp):
+            t = string_obj._alloc_temp()
+            string_obj._compile_into(t)
+            string_obj = t
 
         step = item.step if item.step is not None else 1
         if step != 1:
@@ -275,46 +280,6 @@ class NBTStringMethods:
         if self._type is not None and self._type != NBTType.String:
             raise TypeError("Only NBT strings can be sliced.")
         return NBTStringSlice(self, item)
-
-    @lazify("rev", datatype=NBTType.String)
-    def reverse(self: nbt, *, dest=None):
-        from .. import context as ctx
-        from ..context import _runcmd
-        from .nbt import nbt
-        from .score import score
-        from ..control_flow import ScoreIfMatches
-
-        if self._type != NBTType.String:
-            raise TypeError("Cannot reverse non-string.")
-
-        _id = ctx.next_temp_id()
-        temp_str = nbt(addr=f"flare:temp rev_str_{_id}", datatype=NBTType.String)
-        temp_str[:] = self
-
-        dest[:] = ""
-
-        func_name = ctx.get_generated_func_name("rev")
-
-        char_temp = nbt(addr=f"flare:temp rev_char_{_id}", datatype=NBTType.String)
-
-        with ctx.push_context(func_name):
-            char_temp[:] = temp_str[0]
-
-            dest.prepend(char_temp)
-
-            temp_str[:] = temp_str[1:]
-
-            temp_len = self._alloc_temp()
-            if not isinstance(temp_len, score):
-                temp_len = score(addr=f"#rev_len_{_id}")
-            temp_len[:] = len(temp_str)
-            ScoreIfMatches(temp_len, (1, inf)).then(lambda: _runcmd(f"function {func_name}"))
-
-        temp_len = score(addr=f"#rev_len_{_id}")
-        temp_len[:] = len(temp_str)
-        ScoreIfMatches(temp_len, (1, inf)).then(lambda: _runcmd(f"function {func_name}"))
-
-        return dest
 
     @lazify("lower", datatype=NBTType.String)
     def lower(self: nbt, *, dest=None):
