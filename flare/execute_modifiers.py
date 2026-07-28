@@ -266,10 +266,11 @@ class StoreExecuteChain(ExecuteChain):
                     print(
                         f"[Flare Compiler Warning] {e.message} at position {max(0, e.cursor - 8)}:\n{frag}\n{' ' * max(0, e.cursor - 8)}^")
 
-        if self.fragments and self.fragments[-1].startswith("store "):
+        if getattr(self, "_frag_added", False):
             self.fragments[-1] = frag
         else:
             self.fragments.append(frag)
+            self._frag_added = True
 
     def datatype(self, dtype: Any) -> StoreExecuteChain:
         if hasattr(dtype, "name"):

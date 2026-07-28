@@ -27,7 +27,7 @@ from .types import NBTType, byte, boolean, short, long, double, array
 from .variables import score, nbt, fixed, ref, getscore, storage, nbtbyte, nbtbool, nbtshort, nbtint, nbtlong, nbtfloat, \
     nbtdouble, nbtstr, nbtlist, nbtcompound, nbtbytearray, nbtintarray, nbtlongarray, selector, bigscore, bigfixed, \
     float64, float32, complex, macro, struct, compound, fail, Objective, block, item, snbt, len, range, ord, bin, \
-    lazy_apply
+    lazy_apply, addr
 from .variables.core import Function
 from .variables.regex import re_patch as re
 
@@ -49,7 +49,7 @@ __all__ = ["round_", "floor", "ceil", "namespace", "export", "tag", "tick", "loa
            "_flare_with", "_flare_as_var", "runcommand", "_flare_return", "_flare_break", "_flare_continue",
            "_flare_in", "_flare_notin", "_flare_enter_scope", "_flare_exit_scope", "_flare_alone",
            "interpolate_command", "FlareTexture", "texture", "add_texture", "edit_texture", "get_texture", "re",
-           "lazy_apply", "Objective"]
+           "lazy_apply", "Objective", "addr"]
 
 from .resources import __all__ as _dd_all
 from .generated import events as _events

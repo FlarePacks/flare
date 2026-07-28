@@ -569,6 +569,21 @@ def evaluate_implicit_coord(seq) -> bool:
 
 def preprocess_minecraft_commands(source: str) -> str:
     source = re.sub(r'import\s+([a-zA-Z0-9_]+:[a-zA-Z0-9_/]+)\s+as\s+([a-zA-Z0-9_]+)', r'\2 = Function("\1")', source)
+
+    def _repl_from_as(m):
+        ns = m.group(1)
+        func = m.group(2)
+        alias = m.group(3)
+        return f'{alias} = Function("{ns}/{func}")'
+
+    def _repl_from(m):
+        ns = m.group(1)
+        func = m.group(2)
+        return f'{func} = Function("{ns}/{func}")'
+
+    source = re.sub(r'from\s+([a-zA-Z0-9_]+:[a-zA-Z0-9_/]+)\s+import\s+([a-zA-Z0-9_]+)\s+as\s+([a-zA-Z0-9_]+)',
+                    _repl_from_as, source)
+    source = re.sub(r'from\s+([a-zA-Z0-9_]+:[a-zA-Z0-9_/]+)\s+import\s+([a-zA-Z0-9_]+)(?!\s+as)', _repl_from, source)
     lines = source.split("\n")
 
     skip_lines = set()

@@ -2,7 +2,7 @@ from .bigscore import bigscore, bigfixed
 from .block import block
 from .builtins import fail, flare_len as len, flare_range as range, flare_ord as ord, flare_bin as bin
 from .complex import complex
-from .core import UnsupportedOperandError, BinaryOp, UnaryOp, macro, ref, lazy_apply
+from .core import UnsupportedOperandError, BinaryOp, UnaryOp, macro, ref, lazy_apply, addr
 from .float32 import float32
 from .float64 import float64
 from .item import item
