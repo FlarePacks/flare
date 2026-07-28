@@ -723,6 +723,53 @@ def preprocess_minecraft_commands(source: str) -> str:
                 i += 1
                 continue
 
+        if tok.type == tokenize.NAME and tok.string == "store":
+            j = i + 1
+            while j < len(tokens) and tokens[j].type in (tokenize.NL, tokenize.NEWLINE, tokenize.INDENT,
+                                                         tokenize.DEDENT):
+                j += 1
+            if j < len(tokens) and tokens[j].type == tokenize.OP and tokens[j].string == "(":
+                bracket_count = 1
+                curr = j + 1
+                inside_tokens = []
+                op_index = -1
+                op_name_map = {"=": "iset", "+=": "iadd", "-=": "isub", "*=": "imul", "/=": "idiv", "//=": "idiv",
+                               "%=": "imod"}
+                op_found = None
+                while curr < len(tokens) and bracket_count > 0:
+                    inner_tok = tokens[curr]
+                    if inner_tok.type == tokenize.OP:
+                        if inner_tok.string in ("(", "{", "["):
+                            bracket_count += 1
+                        elif inner_tok.string in (")", "}", "]"):
+                            bracket_count -= 1
+                            if bracket_count == 0:
+                                break
+                        elif bracket_count == 1 and inner_tok.string in op_name_map:
+                            op_index = len(inside_tokens)
+                            op_found = op_name_map[inner_tok.string]
+                    inside_tokens.append(inner_tok)
+                    curr += 1
+
+                if bracket_count == 0 and op_index > 0 and op_found:
+                    var_toks = inside_tokens[:op_index]
+                    val_toks = inside_tokens[op_index + 1:]
+
+                    out_tokens.append((tokenize.NAME, "store"))
+                    out_tokens.append((tokenize.OP, "("))
+                    for vt in var_toks:
+                        out_tokens.append((vt.type, vt.string))
+                    out_tokens.append((tokenize.OP, ")"))
+                    out_tokens.append((tokenize.OP, "."))
+                    out_tokens.append((tokenize.NAME, op_found))
+                    out_tokens.append((tokenize.OP, "("))
+                    for vt in val_toks:
+                        out_tokens.append((vt.type, vt.string))
+                    out_tokens.append((tokenize.OP, ")"))
+
+                    i = curr + 1
+                    continue
+
         if tok.type == tokenize.NAME and tok.string in ("success", "store"):
             j = i + 1
             while j < len(tokens) and tokens[j].type in (tokenize.NL, tokenize.NEWLINE, tokenize.INDENT,
