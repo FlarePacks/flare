@@ -27,6 +27,7 @@ class BlockPredicate:
 @struct
 class BlockPredicateState:
     pass
+ResolvableNumber = Union[float, str]
 
 @struct
 class TrimMaterial:
@@ -40,7 +41,7 @@ class TrimMaterial:
 
 @struct
 class TrimPattern:
-    asset_id: str
+    asset_id: Union[str, str]
     description: 'Text'
     template_item: Union[str, str]
     decal: bool
@@ -143,12 +144,12 @@ class AttackRange:
 
 @struct
 class BrewingFuel:
-    uses: str
-    speed_multiplier: str
+    uses: 'ResolvableNumber'
+    speed_multiplier: 'ResolvableNumber'
 
 @struct
 class Compostable:
-    layers: str
+    layers: 'ResolvableNumber'
 
 @struct
 class Consumable:
@@ -164,8 +165,8 @@ class ConsumeEffect:
 
 @struct
 class CookingFuel:
-    burn_time: str
-    speed_multiplier: str
+    burn_time: 'ResolvableNumber'
+    speed_multiplier: 'ResolvableNumber'
 
 @struct
 class DamageReduction:

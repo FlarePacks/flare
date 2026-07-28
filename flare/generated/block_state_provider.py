@@ -5,16 +5,10 @@ from flare.generated.data_component import *
 class NoiseParameters:
     def __init__(
             self,
-            firstOctave: Optional[Union[int, Any]] = None,
-            amplitudes: Optional[Union[list[double], Any]] = None,
             **kwargs
     ):
         self.components = {}
         self.components.update(kwargs)
-        if firstOctave is not None:
-            self.components["firstOctave"] = firstOctave
-        if amplitudes is not None:
-            self.components["amplitudes"] = amplitudes
 
     def to_dict(self):
         res = {}

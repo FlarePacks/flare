@@ -92,15 +92,15 @@ class Equipment:
     def __init__(
             self,
             layers: Optional[Union['Layers', Any]] = None,
-            trim_palette_replacements: Optional[Union[dict, Any]] = None,
+            trim_overrides: Optional[Union[list['TrimOverride'], Any]] = None,
             **kwargs
     ):
         self.components = {}
         self.components.update(kwargs)
         if layers is not None:
             self.components["layers"] = layers
-        if trim_palette_replacements is not None:
-            self.components["trim_palette_replacements"] = trim_palette_replacements
+        if trim_overrides is not None:
+            self.components["trim_overrides"] = trim_overrides
 
     def to_dict(self):
         res = {}
@@ -177,6 +177,34 @@ class Layers:
             self.components["zombie_horse_saddle"] = zombie_horse_saddle
         if skeleton_horse_saddle is not None:
             self.components["skeleton_horse_saddle"] = skeleton_horse_saddle
+
+    def to_dict(self):
+        res = {}
+        for k, v in self.components.items():
+            if hasattr(v, 'to_dict'):
+                res[k] = v.to_dict()
+            elif isinstance(v, list):
+                res[k] = [x.to_dict() if hasattr(x, 'to_dict') else x for x in v]
+            else:
+                res[k] = v
+        return res
+
+class TrimOverride:
+    def __init__(
+            self,
+            when: Optional[Union[{'pattern': str, 'material': str}, Any]] = None,
+            texture: Optional[Union[str, Any]] = None,
+            palette: Optional[Union['PaletteRef', Any]] = None,
+            **kwargs
+    ):
+        self.components = {}
+        self.components.update(kwargs)
+        if when is not None:
+            self.components["when"] = when
+        if texture is not None:
+            self.components["texture"] = texture
+        if palette is not None:
+            self.components["palette"] = palette
 
     def to_dict(self):
         res = {}
@@ -2197,7 +2225,7 @@ class TrimMaterial:
 class TrimPattern:
     def __init__(
             self,
-            asset_id: Optional[Union[str, Any]] = None,
+            asset_id: Optional[Union[Union[str, str], Any]] = None,
             description: Optional[Union['Text', Any]] = None,
             template_item: Optional[Union[Union[str, str], Any]] = None,
             decal: Optional[Union[bool, Any]] = None,
@@ -3186,16 +3214,10 @@ class MultiNoiseBiomeSourceParameterList:
 class NoiseParameters:
     def __init__(
             self,
-            firstOctave: Optional[Union[int, Any]] = None,
-            amplitudes: Optional[Union[list[double], Any]] = None,
             **kwargs
     ):
         self.components = {}
         self.components.update(kwargs)
-        if firstOctave is not None:
-            self.components["firstOctave"] = firstOctave
-        if amplitudes is not None:
-            self.components["amplitudes"] = amplitudes
 
     def to_dict(self):
         res = {}

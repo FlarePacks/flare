@@ -186,6 +186,7 @@ class EntityBase:
     OnGround: bool
     NoGravity: bool
     Invulnerable: bool
+    invulnerable_time: int
     PortalCooldown: int
     UUIDMost: long
     UUIDLeast: long

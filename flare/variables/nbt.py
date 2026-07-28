@@ -35,6 +35,19 @@ def _contains_macro(val) -> bool:
     return False
 
 
+_NBT_NUMERIC_RANK = {NBTType.Byte: 1, NBTType.Short: 2, NBTType.Int: 3, NBTType.Long: 4, NBTType.Float: 5,
+                     NBTType.Double: 6}
+
+
+def is_type_narrowing(source_type, target_type):
+    if source_type in _NBT_NUMERIC_RANK and target_type in _NBT_NUMERIC_RANK:
+        if source_type in (NBTType.Float, NBTType.Double) and target_type in (NBTType.Byte, NBTType.Short, NBTType.Int,
+                                                                              NBTType.Long):
+            return True
+        return _NBT_NUMERIC_RANK[source_type] > _NBT_NUMERIC_RANK[target_type]
+    return False
+
+
 def _runcmd_snbt(cmd: str, *, src_val):
     from ..context import _runcmd
     if _contains_macro(src_val):
@@ -1404,8 +1417,27 @@ class nbt(FlareValue, NBTStringMethods):
                 self[k].__iset__(v)
             return self
         if isinstance(other, nbt):
-            if (self._type is None or other._type is None or self._type == other._type or (
-                    self.is_floaty() and other.is_integer())):
+            if self._type == other._type or (self._type is None and other._type is None):
+                if addr(self) != addr(other):
+                    _runcmd(_emit_data_modify_from(addr(self), "set", addr(other)))
+                return self
+            if self.is_number() and (other.is_number() or other._type is None):
+                if other._type is not None and is_type_narrowing(other._type, self._type):
+                    from ..utils import get_source_location_str
+                    loc_str = get_source_location_str()
+                    mode = getattr(ctx, "type_narrowing", "warning")
+                    if mode == "strict":
+                        raise TypeError(
+                            f"{loc_str}Narrowing type conversion from '{other._type_name.lower()}' to '{self._type_name.lower()}' is disabled under strict type_narrowing.")
+                    elif mode == "warning":
+                        print(
+                            f"\033[93m[Flare Compiler Warning] {loc_str}Narrowing type conversion from '{other._type_name.lower()}' to '{self._type_name.lower()}'. Data loss or precision reduction may occur.\033[0m")
+
+                store_type = self._type_name.lower()
+                scale_str = "1.0" if self.is_floaty() else "1"
+                _runcmd(f"execute store result {addr(self)} {store_type} {scale_str} run data get {addr(other)}")
+                return self
+            if self._type is None or other._type is None:
                 if addr(self) != addr(other):
                     _runcmd(_emit_data_modify_from(addr(self), "set", addr(other)))
                 return self

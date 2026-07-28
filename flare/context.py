@@ -73,6 +73,7 @@ validation_level = "strict"
 system_command_validation = "none"
 minecraft_version = "1.20.4"
 nbt_schema_missing = "error"
+type_narrowing = "warning"
 
 
 def next_temp_id():
@@ -110,7 +111,7 @@ def get_generated_func_name(prefix: str) -> str:
 
 
 def reset_context():
-    global current_file, _current_namespace, _temp_id, _func_id, _objective_offset, _constant_offset, validation_level, system_command_validation, minecraft_version, nbt_schema_missing, _in_recursive_context, _logical_func, memoized_math
+    global current_file, _current_namespace, _temp_id, _func_id, _objective_offset, _constant_offset, validation_level, system_command_validation, minecraft_version, nbt_schema_missing, type_narrowing, _in_recursive_context, _logical_func, memoized_math
     files.clear()
     json_files.clear()
     resourcepack_textures.clear()
