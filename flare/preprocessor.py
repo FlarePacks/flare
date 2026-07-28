@@ -358,6 +358,22 @@ class FlareTransformer(ast.NodeTransformer):
     def visit_Assign(self, node):
         self.generic_visit(node)
 
+        if len(node.targets) > 1:
+            tmp_name = self.gen_name()
+            assign_tmp = ast.Assign(targets=[ast.Name(id=tmp_name, ctx=ast.Store())], value=node.value)
+            ast.copy_location(assign_tmp, node)
+            new_assigns = [assign_tmp]
+
+            for target in reversed(node.targets):
+                single_assign = ast.Assign(targets=[target], value=ast.Name(id=tmp_name, ctx=ast.Load()))
+                ast.copy_location(single_assign, node)
+                res = self.visit_Assign(single_assign)
+                if isinstance(res, list):
+                    new_assigns.extend(res)
+                else:
+                    new_assigns.append(res)
+            return new_assigns
+
         if len(node.targets) == 1:
             if isinstance(node.targets[0], ast.Name):
                 var_name = node.targets[0].id
@@ -505,8 +521,8 @@ def evaluate_implicit_coord(seq) -> bool:
         return False
 
     PYTHON_KEYWORDS = {"lambda", "def", "import", "from", "for", "while", "if", "elif", "else", "return", "class",
-        "with", "as", "in", "not", "and", "or", "is", "pass", "yield", "raise", "try", "except", "finally", "global",
-        "nonlocal"}
+                       "with", "as", "in", "not", "and", "or", "is", "pass", "yield", "raise", "try", "except",
+                       "finally", "global", "nonlocal"}
 
     if seq[0].string in PYTHON_KEYWORDS:
         return False
