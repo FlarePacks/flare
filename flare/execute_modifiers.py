@@ -143,11 +143,74 @@ class ExecuteChain:
 
         if isinstance(target, score):
             target._check_addr()
-            return self._add(f"store result score {addr(target)}")
+            chain = self._add(f"store result score {addr(target)}")
+            chain._target_score = target
+            return chain
         elif isinstance(target, nbt):
             target._check_addr()
-            return StoreExecuteChain(self.fragments.copy(), target, is_success=False)
+            chain = StoreExecuteChain(self.fragments.copy(), target, is_success=False)
+            return chain
         return self._add(f"store result {target}")
+
+    def _op_call(self, op_name: str, val: Any) -> Any:
+        from .variables.core import LazyOp
+        from .variables.score import score
+        from . import context as ctx
+
+        target_var = getattr(self, "_target", getattr(self, "_target_score", None))
+
+        def eval_fn(dest):
+            chain_prefix = list(self.fragments)
+            if dest is not None and dest is not target_var:
+                if hasattr(dest, "_check_addr"):
+                    dest._check_addr()
+                if isinstance(dest, score):
+                    chain_prefix.append(f"store result score {addr(dest)}")
+                elif hasattr(dest, "_path"):
+                    dtype = dest._type_name.lower() if getattr(dest, "_type", None) else "double"
+                    chain_prefix.append(f"store result storage {dest._target} {dest._path} {dtype} 1.0")
+
+            exec_str = " ".join(chain_prefix)
+
+            file_len = len(ctx.files[ctx.current_file])
+            if op_name == "idiv":
+                target_var.__idiv__(val)
+            elif op_name == "iadd":
+                target_var.__iadd__(val)
+            elif op_name == "isub":
+                target_var.__isub__(val)
+            elif op_name == "imul":
+                target_var.__imul__(val)
+            elif op_name == "imod":
+                target_var.__imod__(val)
+            elif op_name == "iset":
+                target_var.__iset__(val)
+
+            emitted = ctx.files[ctx.current_file][file_len:]
+            ctx.files[ctx.current_file] = ctx.files[ctx.current_file][:file_len]
+            for cmd in emitted:
+                ctx._runcmd(ctx.combine_execute(exec_str, cmd))
+            return dest
+
+        return LazyOp(target_var, eval_fn)
+
+    def idiv(self, val):
+        return self._op_call("idiv", val)
+
+    def iadd(self, val):
+        return self._op_call("iadd", val)
+
+    def isub(self, val):
+        return self._op_call("isub", val)
+
+    def imul(self, val):
+        return self._op_call("imul", val)
+
+    def imod(self, val):
+        return self._op_call("imod", val)
+
+    def iset(self, val):
+        return self._op_call("iset", val)
 
     def store_success(self, target: Union["flare.variables.score", "flare.variables.nbt", str]) -> ExecuteChain:
         from .variables.nbt import nbt
