@@ -504,6 +504,13 @@ def evaluate_implicit_coord(seq) -> bool:
     if seq[0].string not in ("~", "^", "+", "-", "$") and seq[0].type not in (tokenize.NUMBER, tokenize.NAME):
         return False
 
+    PYTHON_KEYWORDS = {"lambda", "def", "import", "from", "for", "while", "if", "elif", "else", "return", "class",
+        "with", "as", "in", "not", "and", "or", "is", "pass", "yield", "raise", "try", "except", "finally", "global",
+        "nonlocal"}
+
+    if seq[0].string in PYTHON_KEYWORDS:
+        return False
+
     if seq[0].type == tokenize.NAME and len(seq) > 1 and seq[1].string == "(":
         return False
 
@@ -766,7 +773,8 @@ def preprocess_minecraft_commands(source: str) -> str:
             if not rest:
                 if i + 1 < len(tokens):
                     next_tok = tokens[i + 1]
-                    if next_tok.string in ("~", "^", "$") or next_tok.type == tokenize.NUMBER:
+                    if next_tok.string in ("~", "^", "$") or (
+                            next_tok.type == tokenize.NUMBER and next_tok.start == tok.end):
                         is_b_coord = True
             elif rest.startswith("~") or rest.startswith("^") or rest.isdigit():
                 is_b_coord = True
@@ -1080,6 +1088,7 @@ HEADER_IMPORTS = ("from flare import *\n"
                   "from flare.command_parser import interpolate_command\n"
                   "from flare import _flare_print as print\n"
                   "from flare.variables.builtins import flare_range as range, flare_ord as ord, flare_bin as bin, flare_len as len\n"
+                  "from flare.variables.core import lazy_apply\n"
                   "from flare.variables.regex import re_patch as re\n")
 
 

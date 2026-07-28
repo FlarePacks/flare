@@ -25,36 +25,38 @@ def lazify(temp="#temp", datatype=None, self=True, copy=None):
 
                 def eval_func(dest, **eval_kwargs):
                     merged_kwargs = {**kwargs, **eval_kwargs}
-                    return func(*args, dest=dest, **merged_kwargs)
+                    call_args = list(args)
+                    if isinstance(call_args[0], LazyOp):
+                        t = call_args[0]._alloc_temp()
+                        call_args[0]._compile_into(t)
+                        call_args[0] = t
+                    return func(*call_args, dest=dest, **merged_kwargs)
 
                 def alloc_temp():
+                    target_type = datatype(obj_or_arg) if callable(datatype) else datatype
                     if callable(temp):
                         if len(inspect.signature(temp).parameters) == 1:
                             dest = temp(obj_or_arg)
                         else:
                             dest = temp()
+                    elif target_type is not None:
+                        from .nbt import nbt
+                        dest = nbt(addr=f"flare:temp {temp}_{ctx.next_temp_id()}", datatype=target_type)
                     else:
                         dest = obj_or_arg._alloc_temp(prefix=temp)
 
-                    if datatype is not None and hasattr(dest, "_type"):
-                        dest._type = datatype
+                    if target_type is not None and hasattr(dest, "_type"):
+                        dest._type = target_type
                     return dest
 
                 def make_copy(varid):
-                    from .score import score, vars_obj
                     if copy is not None:
                         return copy(obj_or_arg, varid)
                     t = alloc_temp()
-                    if hasattr(t, "_parse_addr"):
-                        if isinstance(t, score):
-                            t._parse_addr(f"{varid} {vars_obj}")
-                        else:
-                            t._parse_addr(f"storage {ctx._current_namespace}:vars {varid}")
-                    else:
-                        if isinstance(t, score):
-                            t._addr = f"{varid} {vars_obj}"
-                        else:
-                            t._addr = f"storage {ctx._current_namespace}:vars {varid}"
+                    if hasattr(t, "_create_var"):
+                        return t._create_var(varid)
+                    if hasattr(t, "__icopy__"):
+                        return t.__icopy__(varid)
                     return t
 
                 return obj_or_arg._lazify(eval_func, alloc_temp, make_copy, op_name=func.__name__,
@@ -536,9 +538,11 @@ class LazyOp(FlareValue):
         return t
 
     def __getitem__(self, item):
-        temp = self._alloc_temp()
-        self._compile_into(temp)
-        return temp[item]
+        from ..types import NBTType
+        from .string import NBTStringSlice
+        if self._type == NBTType.String and isinstance(item, slice):
+            return NBTStringSlice(self, item)
+        return lazy_apply(self, lambda x: x[item])
 
     def _best_leaf(self):
         if self.alloc_temp_fn is not None:
@@ -555,8 +559,50 @@ class LazyOp(FlareValue):
     def _compile_into(self, dest):
         return self.eval_fn(dest)
 
+    def __alone__(self):
+        t = self.operand if hasattr(self, "operand") and self.operand is not None else self._alloc_temp()
+        self._compile_into(t)
+        return t
+
+    def __getattr__(self, name):
+        if name.startswith("_"):
+            raise AttributeError(name)
+
+        def lazy_method_wrapper(*args, **kwargs):
+            return lazy_apply(self, lambda x: getattr(x, name)(*args, **kwargs))
+
+        return lazy_method_wrapper
+
     def __branch__(self, invert=False):
         return BinaryOp(self, 0, "ne").__branch__(invert)
+
+
+def lazy_apply(operand, fn, prefix="#lazy"):
+    def eval_fn(dest):
+        from .nbt import nbt
+        from .score import score
+        if hasattr(operand, "_compile_into") and not isinstance(operand, (nbt, score)):
+            t = operand._alloc_temp(prefix=prefix)
+            operand._compile_into(t)
+            target = t
+        else:
+            target = operand
+
+        res = fn(target)
+        if hasattr(res, "_compile_into") and not isinstance(res, (nbt, score)):
+            res._compile_into(dest)
+        elif res is not dest and hasattr(dest, "__iset__"):
+            dest.__iset__(res)
+        return dest
+
+    def alloc_temp():
+        if hasattr(operand, "_alloc_temp"):
+            return operand._alloc_temp(prefix=prefix)
+        from .score import score
+        from .. import context as ctx
+        return score(addr=f"{prefix}{ctx.next_temp_id()}")
+
+    return LazyOp(operand, eval_fn, alloc_temp)
 
 
 class UnsupportedOperandError(Exception):
