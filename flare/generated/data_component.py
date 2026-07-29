@@ -41,7 +41,6 @@ class TrimMaterial:
 
 @struct
 class TrimPattern:
-    asset_id: Union[str, str]
     description: 'Text'
     template_item: Union[str, str]
     decal: bool

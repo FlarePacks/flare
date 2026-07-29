@@ -332,6 +332,9 @@ class BinaryOp(FlareValue):
         return self._best_leaf()._alloc_temp(prefix=prefix)
 
     def _compile_into(self, dest):
+        from ..context import _runcmd
+        from .nbt import nbt
+
         if self.op in ("eq", "ne", "lt", "le", "gt", "ge", "and", "or", "not"):
             raise TypeError("Logical/Relational operators cannot be assigned directly.")
         iop = f"__i{self.op}__"
@@ -352,6 +355,41 @@ class BinaryOp(FlareValue):
 
             if get_priority(right_node) > get_priority(left_node):
                 left_node, right_node = right_node, left_node
+
+        if self.op == "mul":
+            target_nbt = None
+            literal_scale = None
+            if isinstance(left_node, nbt) and getattr(left_node, "is_number", lambda: False)() and isinstance(
+                    right_node, (int, float)):
+                target_nbt = left_node
+                literal_scale = right_node
+            elif isinstance(right_node, nbt) and getattr(right_node, "is_number", lambda: False)() and isinstance(
+                    left_node, (int, float)):
+                target_nbt = right_node
+                literal_scale = left_node
+
+            if target_nbt is not None and literal_scale is not None and isinstance(dest, nbt):
+                dest._check_addr()
+                target_nbt._check_addr()
+                scale_str = f"{literal_scale:g}" if isinstance(literal_scale, float) or (
+                        dest.is_floaty() and literal_scale % 1 != 0) else str(int(literal_scale))
+                _runcmd(
+                    f"execute store result {addr(dest)} {dest._store_type} {scale_str} run data get {addr(target_nbt)}")
+                return dest
+
+        if self.op in ("truediv", "floordiv", "div"):
+            from .nbt import nbt
+            if isinstance(left_node, nbt) and getattr(left_node, "is_number", lambda: False)() and isinstance(
+                    right_node, (int, float)) and right_node != 0:
+                if isinstance(dest, nbt):
+                    dest._check_addr()
+                    left_node._check_addr()
+                    from ..context import _runcmd
+                    scale = 1.0 / float(right_node)
+                    scale_str = f"{scale:g}"
+                    _runcmd(
+                        f"execute store result {addr(dest)} {dest._store_type} {scale_str} run data get {addr(left_node)}")
+                    return dest
 
         if isinstance(left_node, (BinaryOp, UnaryOp, LazyOp, MathOp)):
             left_node._compile_into(dest)
@@ -823,11 +861,11 @@ class _LazyFunctionCall(FlareValue):
         return dest
 
     def __branch__(self, invert=False):
-        if self.nbt is not None:
-            from ..context import next_temp_id, vars_obj
-            from .score import score
-            from ..execute_modifiers import store_success
+        from ..context import next_temp_id, vars_obj
+        from .score import score
+        from ..execute_modifiers import store_success
 
+        if self.nbt is not None:
             temp_score = score(addr=f"#ret_{next_temp_id()} {vars_obj}")
             store_success(temp_score).__with__(self.__alone__)
             return temp_score.__branch__(invert)
