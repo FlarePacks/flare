@@ -782,6 +782,7 @@ class VillagerBase:
 @struct
 class Villager(Breedable, VillagerBase):
     VillagerData: 'VillagerData'
+    VillagerDataFinalized: bool
     FoodLevel: byte
     Gossips: list['PlayerReputationPart']
     LastGossipDecay: long
@@ -1120,6 +1121,7 @@ class Zombie(MobBase):
 @struct
 class ZombieVillager(Zombie):
     VillagerData: 'VillagerData'
+    VillagerDataFinalized: bool
     Gossips: list['PlayerReputationPart']
     Offers: 'Offers'
     ConversionTime: int

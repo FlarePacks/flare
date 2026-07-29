@@ -2225,7 +2225,6 @@ class TrimMaterial:
 class TrimPattern:
     def __init__(
             self,
-            asset_id: Optional[Union[Union[str, str], Any]] = None,
             description: Optional[Union['Text', Any]] = None,
             template_item: Optional[Union[Union[str, str], Any]] = None,
             decal: Optional[Union[bool, Any]] = None,
@@ -2233,8 +2232,6 @@ class TrimPattern:
     ):
         self.components = {}
         self.components.update(kwargs)
-        if asset_id is not None:
-            self.components["asset_id"] = asset_id
         if description is not None:
             self.components["description"] = description
         if template_item is not None:

@@ -410,22 +410,26 @@ def _number_sub(self: nbt, other):
 
 def _number_mul(self: nbt, other):
     self._check_addr()
-    if isinstance(other, (score, nbt)):
+    if isinstance(other, (int, float)):
+        scale_str = f"{other:g}" if isinstance(other, float) or (self.is_floaty() and other % 1 != 0) else str(
+            int(other))
+        _runcmd(f"execute store result {addr(self)} {self._store_type} {scale_str} run data get {addr(self)}")
+        return self
+    if isinstance(other, score):
         other._check_addr()
-    temp = score(addr="#mul0")
-    temp2 = score(addr="#mul1")
-    if isinstance(other, (int, float, score)):
-        if self.is_floaty() and isinstance(other, score):
+        if self.is_floaty():
             raise TypeError("Use nbt.mul(score, multiplier) for float multiplication")
-        if isinstance(other, float):
-            raise TypeError("Use nbt.mul(score, multiplier) for float multiplication")
+        temp = score(addr="#mul0")
         _runcmd(f"execute store result score {addr(temp)} run data get {addr(self)}")
         temp *= other
         _runcmd(f"execute store result {addr(self)} {self._store_type} 1 run scoreboard players get {addr(temp)}")
         return self
     if isinstance(other, nbt):
+        other._check_addr()
         if self.is_floaty() or other.is_floaty():
             raise TypeError("Use nbt.mulp(other_nbt, multiplier) for float multiplication")
+        temp = score(addr="#mul0")
+        temp2 = score(addr="#mul1")
         _runcmd(f"execute store result score {addr(temp)} run data get {addr(other)}")
         _runcmd(f"execute store result score {addr(temp2)} run data get {addr(self)}")
         temp2 *= temp
@@ -436,22 +440,28 @@ def _number_mul(self: nbt, other):
 
 def _number_div(self: nbt, other):
     self._check_addr()
-    if isinstance(other, (score, nbt)):
+    if isinstance(other, (int, float)):
+        if other == 0:
+            raise ZeroDivisionError("division by zero")
+        scale = 1.0 / float(other)
+        scale_str = f"{scale:g}"
+        _runcmd(f"execute store result {addr(self)} {self._store_type} {scale_str} run data get {addr(self)}")
+        return self
+    if isinstance(other, score):
         other._check_addr()
-    temp = score(addr="#div0")
-    temp2 = score(addr="#div1")
-    if isinstance(other, (int, float, score)):
-        if self.is_floaty() and isinstance(other, score):
+        if self.is_floaty():
             raise TypeError("Use nbt.divp(score, multiplier) for float division")
-        if isinstance(other, float):
-            raise TypeError("Use nbt.divp(score, multiplier) for float division")
+        temp = score(addr="#div0")
         _runcmd(f"execute store result score {addr(temp)} run data get {addr(self)}")
         temp /= other
         _runcmd(f"execute store result {addr(self)} {self._store_type} 1 run scoreboard players get {addr(temp)}")
         return self
     if isinstance(other, nbt):
+        other._check_addr()
         if self.is_floaty() or other.is_floaty():
             raise TypeError("Use nbt.divp(other_nbt, multiplier) for float division")
+        temp = score(addr="#div0")
+        temp2 = score(addr="#div1")
         _runcmd(f"execute store result score {addr(temp)} run data get {addr(other)}")
         _runcmd(f"execute store result score {addr(temp2)} run data get {addr(self)}")
         temp2 /= temp
