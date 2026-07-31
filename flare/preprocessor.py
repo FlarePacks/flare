@@ -1129,8 +1129,6 @@ def preprocess_minecraft_commands(source: str) -> str:
                 temp_i += 1
 
             if evaluate_implicit_coord(seq):
-                out_tokens.append(tok)
-
                 modifiers = ""
                 coords = []
                 k = 0
