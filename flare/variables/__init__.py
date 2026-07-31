@@ -10,7 +10,7 @@ from .nbt import nbt, struct
 from .objective import Objective
 from .score import score, fixed, getscore, INT32_LIMIT
 from .selector import selector
-from .snbt import snbt
+from .snbt import snbt, _snbt_array
 from .storage import _Storage
 from ..types import byte, boolean, short, long, double, array, compound
 

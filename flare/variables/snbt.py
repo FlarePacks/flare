@@ -1,3 +1,6 @@
+from typing import Any
+
+
 class snbt:
     def __init__(self, value, suffix: str = ""):
         if isinstance(value, snbt):
@@ -151,3 +154,44 @@ class snbt:
 
 
 _snbt = snbt
+
+
+class _snbt_array:
+    def __init__(self, prefix: str, items: list):
+        self.prefix = prefix.upper()
+        self.items = items
+
+    def _suffix(self) -> str:
+        if self.prefix == "B":
+            return "b"
+        elif self.prefix == "L":
+            return "l"
+        return ""
+
+    def _adapt_element(self, val: Any) -> Any:
+        from .nbt import nbt
+        from ..types import byte, long
+        if self.prefix == "B":
+            return nbt[byte](val)
+        elif self.prefix == "I":
+            return nbt[int](val)
+        elif self.prefix == "L":
+            return nbt[long](val)
+        return val
+
+    def __str__(self):
+        suf = self._suffix()
+        parts = []
+        for x in self.items:
+            if isinstance(x, snbt):
+                parts.append(str(x))
+            elif isinstance(x, bool):
+                parts.append("true" if x else "false")
+            elif isinstance(x, (int, float)) and suf:
+                parts.append(f"{x}{suf}")
+            else:
+                parts.append(str(x))
+        return f"[{self.prefix};{','.join(parts)}]"
+
+    def __repr__(self):
+        return str(self)
