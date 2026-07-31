@@ -3,20 +3,20 @@ from __future__ import annotations
 import math
 from math import inf, frexp
 
-from .core import is_lazy, FlareValue
+from .core import is_lazy, FlareValue, addr
 from .nbt import nbt
 from .score import score
 from .. import context as ctx
-from ..context import _invoke_stdlib, temp_storage
+from ..context import _invoke_stdlib, temp_storage, _runcmd
 from ..context import temp_obj, next_temp_id
 from ..control_flow import ScoreIfMatches, ScoreIfScore
 from ..variables import bigscore
 
 
 class float64(FlareValue):
-    _implements_set = (int, float)
+    _implements_set = (int, float, score)
 
-    def __init__(self, value: float | int | None = None, *, addr: str | None = None):
+    def __init__(self, value: float | int | score | float64 | None = None, *, addr: str | None = None):
         self._value_to_set = value
         self._addr = None
         self._target = ""
@@ -34,6 +34,9 @@ class float64(FlareValue):
 
     def _alloc_temp(self, prefix="#temp"):
         return type(self)(addr=f"{prefix}_{ctx.next_temp_id()}")
+
+    def _type_priority(self):
+        return 200.0
 
     def _create_var(self, varid: str):
         return type(self)(addr=ctx.get_score_var_addr(varid))
@@ -72,6 +75,21 @@ class float64(FlareValue):
 
     def __iset__(self, other):
         self._check_addr()
+        if isinstance(other, score):
+            score_to_float64(other, dest=self)
+            return self
+
+        if type(other).__name__ == "nbt" or hasattr(other, "_is_nbt_var"):
+            other._check_addr()
+            if getattr(other, "is_floaty", lambda: False)():
+                s_temp = score(addr=f"#f64_nbt_{next_temp_id()}", multiplier=1e-6)
+                _runcmd(f"execute store result score {addr(s_temp)} run data get {addr(other)} 1000000")
+            else:
+                s_temp = score(addr=f"#f64_nbt_{next_temp_id()}", multiplier=1.0)
+                _runcmd(f"execute store result score {addr(s_temp)} run data get {addr(other)}")
+            self.__iset__(s_temp)
+            return self
+
         if isinstance(other, (int, float)):
             if other == 0.0:
                 self._sign[:] = 1
@@ -104,11 +122,19 @@ class float64(FlareValue):
             self._mant_lo[:] = other._mant_lo
             return self
 
+        if type(other).__name__ == "float32" or (hasattr(other, "_mant") and not hasattr(other, "_mant_hi")):
+            other._check_addr()
+            self._sign[:] = other._sign
+            self._exp[:] = other._exp
+            self._mant_hi[:] = other._mant * 8
+            self._mant_lo[:] = 0
+            return self
+
         if is_lazy(other):
             other._compile_into(self)
             return self
 
-        return self._try_binary("__iset__", "=", other, (float, int, float64))
+        return self._try_binary("__iset__", "=", other, (float, int, score, nbt, float64))
 
     def __iadd__(self, other):
         if isinstance(other, float64):
@@ -1141,3 +1167,112 @@ class float64(FlareValue):
 
     def __repr__(self):
         return f"float64(exp={self._exp}, sign={self._sign}, mant_lo={self._mant_lo}, mant_hi={self._mant_hi})"
+
+
+def score_to_float64(s: score, dest: float64 = None) -> float64:
+    s._check_addr()
+    if dest is None:
+        dest = float64()
+    dest._check_addr()
+
+    val = score(addr=f"#f64_conv_val_{next_temp_id()}", multiplier=1.0)
+    _runcmd(f"scoreboard players operation {addr(val)} = {addr(s)}")
+
+    is_zero = ScoreIfMatches(val, 0)
+    is_zero.then(
+        lambda: [dest._sign.__iset__(1), dest._exp.__iset__(0), dest._mant_hi.__iset__(0), dest._mant_lo.__iset__(0)])
+
+    mult = float(s._multiplier)
+    mult_sign = 1 if mult >= 0 else -1
+    mult = abs(mult)
+
+    dest._sign[:] = mult_sign
+    ScoreIfMatches(val, (-inf, -1)).then(lambda: [dest._sign.__imul__(-1), val.__imul__(-1)])
+
+    def _convert_nonzero():
+        e_int = score(0, addr=f"#f64_conv_e_{next_temp_id()}")
+        val_raw = score(addr=val._addr, multiplier=1.0)
+
+        ScoreIfMatches(val_raw, (1, 1023)).then(lambda: [e_int.__isub__(25), val.__imul__(33554432)])
+        ScoreIfMatches(val_raw, (1, 32767)).then(lambda: [e_int.__isub__(10), val.__imul__(1024)])
+        ScoreIfMatches(val_raw, (1, 1048575)).then(lambda: [e_int.__isub__(5), val.__imul__(32)])
+        ScoreIfMatches(val_raw, (1, 4194303)).then(lambda: [e_int.__isub__(3), val.__imul__(8)])
+        ScoreIfMatches(val_raw, (1, 16777215)).then(lambda: [e_int.__isub__(1), val.__imul__(2)])
+
+        ScoreIfMatches(val_raw, (134217728, inf)).then(lambda: [e_int.__iadd__(2), val.__idiv__(4)])
+        ScoreIfMatches(val_raw, (67108864, inf)).then(lambda: [e_int.__iadd__(1), val.__idiv__(2)])
+
+        dest._mant_hi[:] = val
+        dest._mant_lo[:] = 0
+
+        if mult != 1.0:
+            m_m, e_m = math.frexp(mult)
+            m_m = m_m * 2.0
+            e_m = e_m - 1
+            if m_m != 1.0:
+                scale_factor = int(round(m_m * 64))
+                dest._mant_hi *= scale_factor
+                dest._mant_hi /= 64
+                ScoreIfMatches(dest._mant_hi, (67108864, inf)).then(
+                    lambda: [e_int.__iadd__(1), dest._mant_hi.__idiv__(2)])
+            dest._exp[:] = e_int + 26 + e_m
+        else:
+            dest._exp[:] = e_int + 26
+
+    ScoreIfMatches(val, (-inf, -1)).then(_convert_nonzero)
+    ScoreIfMatches(val, (1, inf)).then(_convert_nonzero)
+    return dest
+
+
+def float64_to_score(f: float64, dest: score = None, multiplier: float = 1.0) -> score:
+    multiplier = float(multiplier)
+    if dest is None:
+        dest = score(multiplier=multiplier)
+    dest._check_addr()
+    f._check_addr()
+
+    is_zero = ScoreIfMatches(f._mant_hi, 0)
+    is_zero.then(lambda: dest.__iset__(0))
+
+    def _convert_nonzero():
+        K = 1.0 / multiplier
+        m_K, e_K = math.frexp(abs(K))
+        m_K = m_K * 2.0
+        e_K = e_K - 1
+        mult_sign = 1 if K >= 0 else -1
+
+        val = f._mant_hi._alloc_temp(prefix="#f64_to_sc_val")
+        val[:] = f._mant_hi
+
+        if m_K != 1.0:
+            scale_factor = int(round(m_K * 64))
+            val *= scale_factor
+            val /= 64
+
+        const_shift = e_K - 26
+        shift = score(addr=f"#f64_to_sc_sh_{next_temp_id()}")
+        shift[:] = f._exp
+        if const_shift != 0:
+            shift += const_shift
+
+        ScoreIfMatches(shift, (-inf, -16)).then(lambda: [val.__idiv__(65536), shift.__iadd__(16)])
+        ScoreIfMatches(shift, (-inf, -8)).then(lambda: [val.__idiv__(256), shift.__iadd__(8)])
+        ScoreIfMatches(shift, (-inf, -4)).then(lambda: [val.__idiv__(16), shift.__iadd__(4)])
+        ScoreIfMatches(shift, (-inf, -2)).then(lambda: [val.__idiv__(4), shift.__iadd__(2)])
+        ScoreIfMatches(shift, (-inf, -1)).then(lambda: [val.__idiv__(2), shift.__iadd__(1)])
+
+        ScoreIfMatches(shift, (16, inf)).then(lambda: [val.__imul__(65536), shift.__isub__(16)])
+        ScoreIfMatches(shift, (8, inf)).then(lambda: [val.__imul__(256), shift.__isub__(8)])
+        ScoreIfMatches(shift, (4, inf)).then(lambda: [val.__imul__(16), shift.__isub__(4)])
+        ScoreIfMatches(shift, (2, inf)).then(lambda: [val.__imul__(4), shift.__isub__(2)])
+        ScoreIfMatches(shift, (1, inf)).then(lambda: [val.__imul__(2), shift.__isub__(1)])
+
+        if mult_sign == -1:
+            val *= -1
+
+        ScoreIfMatches(f._sign, -1).then(lambda: val.__imul__(-1))
+
+        _runcmd(f"scoreboard players operation {addr(dest)} = {addr(val)}")
+
+    ScoreIfMatches(f._mant_hi, (1, inf)).then(_convert_nonzero)
+    return dest

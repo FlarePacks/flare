@@ -37,7 +37,6 @@ class score(FlareValue):
         from .nbt import nbt as _nbt
 
         nbt = _nbt
-        score._implements_set = (int, float, nbt)
         self._multiplier = float(multiplier)
         self._readonly = False
         self._value_to_set = value
@@ -134,10 +133,16 @@ class score(FlareValue):
     def _num(self, num):
         return getscore(num, self._multiplier)
 
-    _implements_set = (int, float)
-
     def __iset__(self, other):
         self._check_writable()
+        if type(other).__name__ == "float32":
+            from .float32 import float32_to_score
+            float32_to_score(other, dest=self, multiplier=self._multiplier)
+            return self
+        if type(other).__name__ == "float64":
+            from .float64 import float64_to_score
+            float64_to_score(other, dest=self, multiplier=self._multiplier)
+            return self
         if is_lazy(other):
             other._compile_into(self)
             return self
