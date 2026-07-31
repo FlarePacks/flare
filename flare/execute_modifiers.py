@@ -429,9 +429,7 @@ def store_success(target: Union["flare.variables.score", "flare.variables.nbt", 
     from .variables.core import FlareValue
 
     if callable(target) and not isinstance(target, FlareValue):
-        from .variables.score import score
-
-        temp = score(addr=f"#succ_{ctx.next_temp_id()} {ctx.vars_obj}")
+        temp = ctx.next_temp_score("succ")
         ExecuteChain().store_success(temp).__with__(target)
         return temp
     return ExecuteChain().store_success(target)
@@ -451,14 +449,12 @@ class _SuccessCondition(FlareValue):
         self._is_nbt_op = False
 
     def __branch__(self, invert=False):
-        from .variables.score import score
-
         if self.func_name:
             if invert:
                 return [f"unless function {self.func_name}"]
             return [f"if function {self.func_name}"]
         else:
-            temp = score(addr=f"#succ_{ctx.next_temp_id()} {ctx.vars_obj}")
+            temp = ctx.next_temp_score("succ")
             store_success(temp).__with__(self.lazy_func)
 
             if invert:
@@ -472,14 +468,12 @@ class _SuccessCondition(FlareValue):
             store_success(target).__with__(lambda: ctx._runcmd(f"function {self.func_name}"))
 
     def _alloc_temp(self):
-        from .variables.score import score
-
-        return score(addr=f"#succ_{ctx.next_temp_id()} {ctx.vars_obj}")
+        return ctx.next_temp_score("succ")
 
     def __icopy__(self, varid: str, is_recursive: bool = False):
         from .variables.score import score
 
-        dest = score(addr=f"{varid} {ctx.vars_obj}")
+        dest = score(addr=ctx.get_score_var_addr(varid))
         self._compile_into(dest)
         return dest
 
@@ -497,14 +491,12 @@ class _StoreCondition(FlareValue):
             ExecuteChain().store(target).__with__(lambda: ctx._runcmd(f"function {self.func_name}"))
 
     def _alloc_temp(self):
-        from .variables.score import score
-
-        return score(addr=f"#res_{ctx.next_temp_id()} {ctx.vars_obj}")
+        return ctx.next_temp_score("res")
 
     def __icopy__(self, varid: str, is_recursive: bool = False):
         from .variables.score import score
 
-        dest = score(addr=f"{varid} {ctx.vars_obj}")
+        dest = score(addr=ctx.get_score_var_addr(varid))
         self._compile_into(dest)
         return dest
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import types
 import typing
-from typing import Any
+from typing import Any, cast
 
 from .core import LazyOp
 from .core import UnsupportedOperandError, BinaryOp, addr, FlareValue, is_lazy, lazify
@@ -69,7 +69,7 @@ def _is_runtime(val) -> bool:
     return False
 
 
-def _is_snbt_literal(item) -> bool:
+def _is_snbt_literal(item: Any) -> bool:
     if isinstance(item, (int, float, str, bool, _snbt)):
         return True
     if isinstance(item, (list, tuple)):
@@ -81,7 +81,7 @@ def _is_snbt_literal(item) -> bool:
     return False
 
 
-def _to_snbt_obj(item):
+def _to_snbt_obj(item: Any) -> Any:
     if isinstance(item, (int, float, str, bool, _snbt)):
         return item
     if isinstance(item, (list, tuple)):
@@ -93,23 +93,22 @@ def _to_snbt_obj(item):
     return item
 
 
-def _get_snbt_target_path(container: nbt, item) -> str:
-    item = _to_snbt_obj(item)
+def _get_snbt_target_path(container: nbt, item: Any) -> str:
+    item_val: Any = _to_snbt_obj(item)
     prefix = ""
     suffix = ""
     if container._type == NBTType.ByteArray:
         prefix = "B;"
-        suffix = "b" if isinstance(item, int) else ""
+        suffix = "b" if isinstance(item_val, int) else ""
     elif container._type == NBTType.IntArray:
         prefix = "I;"
     elif container._type == NBTType.LongArray:
         prefix = "L;"
-        suffix = "l" if isinstance(item, int) else ""
+        suffix = "l" if isinstance(item_val, int) else ""
 
-    item_snbt = _snbt_literal(item)
+    item_snbt = _snbt_literal(item_val)
     if suffix and not item_snbt.endswith(suffix):
         item_snbt += suffix
-
     arr_str = f"[{prefix}{item_snbt}]"
 
     base_target = f"{container._target_type} {container._target}"
@@ -192,8 +191,8 @@ class NBTInOp(FlareValue):
         self._compile_into(target)
 
     def __icopy__(self, varid: str, is_recursive: bool = False):
-        from .score import score, vars_obj
-        dest = score(addr=f"{varid} {vars_obj}")
+        from .score import score
+        dest = score(addr=ctx.get_score_var_addr(varid))
         self._compile_into(dest)
         return dest
 
@@ -213,7 +212,7 @@ def _nbt_default_snbt(nbt_type) -> str:
     return "0"
 
 
-def _snbt_literal(val) -> str:
+def _snbt_literal(val: Any) -> str:
     from .core import macro
     if isinstance(val, _snbt):
         return str(val)
@@ -343,7 +342,7 @@ def struct(cls):
 
         if len(args) == 1 and not kwargs:
             if isinstance(args[0], (str, selector)):
-                return selector[cls_obj](args[0])
+                return cast(Any, selector)[cls_obj](args[0])
         return object.__new__(cls_obj)
 
     def __init__(self, *args, **kwargs):
@@ -696,7 +695,7 @@ class nbt(FlareValue, NBTStringMethods):
         return t
 
     def _create_var(self, varid: str):
-        t = nbt(addr=f"storage {ctx._current_namespace}:vars {varid}", datatype=self._type,
+        t = nbt(addr=ctx.get_nbt_var_addr(ctx._current_namespace, varid), datatype=self._type,
                 schema_node=self._schema_node)
         if hasattr(self, "_inner_type") and getattr(self, "_inner_type") is not None:
             t = type(self)(addr=t._addr, schema_node=t._schema_node)
@@ -827,7 +826,7 @@ class nbt(FlareValue, NBTStringMethods):
         from ..context import _emit_data_modify_from
 
         if is_recursive:
-            base_addr = f"storage {ctx._current_namespace}:vars {varid}"
+            base_addr = ctx.get_nbt_var_addr(ctx._current_namespace, varid)
 
             if self._addr is None:
                 _runcmd(f"data modify {base_addr} append value {{}}")
@@ -839,13 +838,13 @@ class nbt(FlareValue, NBTStringMethods):
                 _runcmd(f"data modify {base_addr} append value {{}}")
                 dest = nbt(addr=f"{ctx._current_namespace}:vars {varid}[-1]", datatype=self._type,
                            schema_node=self._schema_node)
-                if (hasattr(self, "_inner_type") and getattr(self, "_inner_type") is not None):
+                if hasattr(self, "_inner_type") and getattr(self, "_inner_type") is not None:
                     dest = nbt[self._inner_type](addr=dest._addr, schema_node=dest._schema_node)
                 _runcmd(_emit_data_modify_from(base_addr, "append", addr(self)))
                 return dest
 
         if self._addr is None:
-            self._parse_addr(f"{ctx._current_namespace}:vars {varid}")
+            self._parse_addr(ctx.get_nbt_var_addr(ctx._current_namespace, varid))
             if self._value_to_set is not None:
                 self[:] = self._value_to_set
             return self
@@ -1011,9 +1010,6 @@ class nbt(FlareValue, NBTStringMethods):
         return nbt(addr=f"{self._target_type} {self._target} {new_path}", datatype=datatype,
                    schema_node=new_schema_node)
 
-    def _resolve_child_schema(self, raw_node: dict) -> dict:
-        return _resolve_schema_node(raw_node)
-
     def __setattr__(self, name, value):
         if name.startswith("_"):
             super().__setattr__(name, value)
@@ -1088,7 +1084,7 @@ class nbt(FlareValue, NBTStringMethods):
                     elif ctx.nbt_schema_missing == "warning":
                         print(f"Warning: NBT array indexing is not supported in schema for {self._path or 'root'}")
 
-            if (hasattr(self, "_inner_type") and getattr(self, "_inner_type") is not None):
+            if hasattr(self, "_inner_type") and getattr(self, "_inner_type") is not None:
                 return nbt[self._inner_type](addr=f"{self._target_type} {self._target} {new_path}")
 
             return nbt(addr=f"{self._target_type} {self._target} {new_path}", datatype=datatype,
@@ -1131,7 +1127,7 @@ class nbt(FlareValue, NBTStringMethods):
                     elif ctx.nbt_schema_missing == "warning":
                         print(f"Warning: NBT array indexing is not supported in schema for {self._path or 'root'}")
 
-            if (hasattr(self, "_inner_type") and getattr(self, "_inner_type") is not None):
+            if hasattr(self, "_inner_type") and getattr(self, "_inner_type") is not None:
                 return nbt[self._inner_type](addr=f"{self._target_type} {self._target} {new_path}")
 
             return nbt(addr=f"{self._target_type} {self._target} {new_path}", datatype=datatype,
@@ -1139,8 +1135,8 @@ class nbt(FlareValue, NBTStringMethods):
         else:
             raise TypeError(f"Invalid NBT path index: {item}")
 
-    def __setitem__(self, key, value):
-        if (isinstance(key, slice) and key.start is None and key.stop is None and key.step is None):
+    def __setitem__(self, key: Any, value: Any):
+        if isinstance(key, slice) and key.start is None and key.stop is None and key.step is None:
             self.__iset__(value)
             return
         target = self[key]
@@ -1154,7 +1150,7 @@ class nbt(FlareValue, NBTStringMethods):
         else:
             if addr.startswith("@"):
                 self._target_type = "entity"
-            elif (addr.startswith("^") or addr.startswith("~") or (addr and (addr[0].isdigit() or addr[0] == "-"))):
+            elif addr.startswith("^") or addr.startswith("~") or (addr and (addr[0].isdigit() or addr[0] == "-")):
                 self._target_type = "block"
             else:
                 self._target_type = "storage"
@@ -1302,7 +1298,7 @@ class nbt(FlareValue, NBTStringMethods):
             if self._type is not None and not self.is_number():
                 type_name = self._type_name.lower()
                 raise TypeError(f"Cannot set {type_name} to a number")
-            if (self._type is not None and isinstance(other, float) and not self.is_floaty()):
+            if self._type is not None and isinstance(other, float) and not self.is_floaty():
                 raise TypeError(f"Cannot set {self._type_name.lower()} with float")
             if self.is_floaty():
                 other = float(other)

@@ -4,14 +4,14 @@ import functools
 import inspect
 import types
 from abc import ABC, ABCMeta
-from typing import TypeVar, Generic
+from typing import TypeVar, Generic, Any
 
 
 def nostack(func):
     return func
 
 
-def lazify(temp="#temp", datatype=None, self=True, copy=None):
+def lazify(temp: Any = "#temp", datatype=None, self: Any = True, copy=None):
     from .. import context as ctx
     def decorator(func):
         @functools.wraps(func)
@@ -85,16 +85,14 @@ def lazify(temp="#temp", datatype=None, self=True, copy=None):
                     if copy is not None:
                         return copy(varid)
                     t = alloc_temp()
-                    if hasattr(t, "_parse_addr"):
-                        if isinstance(t, score):
-                            t._parse_addr(f"{varid} {vars_obj}")
-                        else:
-                            t._parse_addr(f"storage {ctx._current_namespace}:vars {varid}")
+                    if isinstance(t, score):
+                        addr_str = ctx.get_score_var_addr(varid)
                     else:
-                        if isinstance(t, score):
-                            t._addr = f"{varid} {vars_obj}"
-                        else:
-                            t._addr = f"storage {ctx._current_namespace}:vars {varid}"
+                        addr_str = ctx.get_nbt_var_addr(ctx._current_namespace, varid)
+                    if hasattr(t, "_parse_addr"):
+                        t._parse_addr(addr_str)
+                    else:
+                        t._addr = addr_str
                     return t
 
                 return LazyOp(None, eval_func, alloc_temp, make_copy, op_name=func.__name__, op_args=(args, kwargs))
@@ -117,7 +115,7 @@ class FlareValue(ABC, metaclass=FlareClassMeta):
         raise NotImplementedError()
 
     def __setitem__(self, key, value):
-        if (isinstance(key, slice) and key.start is None and key.stop is None and key.step is None):
+        if isinstance(key, slice) and key.start is None and key.stop is None and key.step is None:
             self.__iset__(value)
             return
         raise TypeError(f"'{type(self).__name__}' object does not support item assignment")
@@ -854,19 +852,18 @@ class _LazyFunctionCall(FlareValue):
         self._compile_into(target)
 
     def __icopy__(self, varid: str, is_recursive: bool = False):
-        from ..context import vars_obj
+        from .. import context as ctx
         from .score import score
-        dest = score(addr=f"{varid} {vars_obj}")
+        dest = score(addr=ctx.get_score_var_addr(varid))
         self._compile_into(dest)
         return dest
 
     def __branch__(self, invert=False):
-        from ..context import next_temp_id, vars_obj
-        from .score import score
+        from .. import context as ctx
         from ..execute_modifiers import store_success
 
         if self.nbt is not None:
-            temp_score = score(addr=f"#ret_{next_temp_id()} {vars_obj}")
+            temp_score = ctx.next_temp_score("ret")
             store_success(temp_score).__with__(self.__alone__)
             return temp_score.__branch__(invert)
         else:

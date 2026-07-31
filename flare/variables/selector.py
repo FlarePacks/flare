@@ -3,7 +3,10 @@ from __future__ import annotations
 import inspect
 import json
 import typing
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..execute_modifiers import InlineCondition
 
 from ..context import _runcmd
 from ..generated import entity as gen_entities
@@ -124,9 +127,7 @@ class selector(Generic[T]):
     def __with__(self, body_func):
         self._as().__with__(body_func)
 
-    def __for__(
-            self, body_func, orelse_func=None, _has_break=False, _has_continue=False
-    ):
+    def __for__(self, body_func, orelse_func=None, _has_break=False, _has_continue=False):
         self.__with__(lambda: body_func(selector("@s")))
         if orelse_func:
             orelse_func()

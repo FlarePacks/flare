@@ -75,6 +75,32 @@ minecraft_version = "1.20.4"
 nbt_schema_missing = "error"
 type_narrowing = "warning"
 
+_nbt_var_addr_formatter = None
+_score_var_addr_formatter = None
+
+
+def set_nbt_var_addr_formatter(fn):
+    global _nbt_var_addr_formatter
+    _nbt_var_addr_formatter = fn
+
+
+def set_score_var_addr_formatter(fn):
+    global _score_var_addr_formatter
+    _score_var_addr_formatter = fn
+
+
+def get_nbt_var_addr(namespace: str, varid: str) -> str:
+    if _nbt_var_addr_formatter is not None:
+        return _nbt_var_addr_formatter(namespace, varid)
+    return f"storage {namespace}:vars {varid}"
+
+
+def get_score_var_addr(varid: str, namespace: str = None) -> str:
+    ns = namespace or _current_namespace or "flare"
+    if _score_var_addr_formatter is not None:
+        return _score_var_addr_formatter(varid, ns)
+    return f"{varid} __{ns}__vars__"
+
 
 def next_temp_id():
     global _temp_id
@@ -96,18 +122,21 @@ def next_func_id():
     return got
 
 
-def get_generated_func_name(prefix: str) -> str:
+def get_generated_func_name(prefix: str, namespace: str = None) -> str:
     global current_file, _current_namespace
 
+    ns_to_use = namespace or _current_namespace
     if current_file and ":" in current_file:
         ns, path = current_file.split(":", 1)
+        if namespace:
+            ns = namespace
         if "/" in path:
             dir_path, filename = path.rsplit("/", 1)
             return f"{ns}:{dir_path}/_{filename}/{prefix}_{next_func_id()}"
         else:
             return f"{ns}:_{path}/{prefix}_{next_func_id()}"
     else:
-        return f"{_current_namespace}:{prefix}_{next_func_id()}"
+        return f"{ns_to_use}:{prefix}_{next_func_id()}"
 
 
 def reset_context():
@@ -678,7 +707,7 @@ def export(func=None, *, name=None, append=False, returns=None):
 
                 if func_name in recursive_locals:
                     for varid in recursive_locals[func_name]:
-                        base_addr = f"storage {_current_namespace}:vars {varid}"
+                        base_addr = get_nbt_var_addr(_current_namespace, varid)
                         _runcmd(f"data remove {base_addr}[-1]")
 
             return self._emit_return()
@@ -894,9 +923,7 @@ def _flare_return(value_fn):
     from .variables.score import addr
     from .variables.builtins import fail
 
-    func_name = _logical_func
-    if func_name is None:
-        raise Exception("Return outside of exported function")
+    func_name = _logical_func or f"{_current_namespace}:__init__"
 
     if isinstance(value_fn, str) and value_fn == "UNKNOWN_RETURN":
         has_returns[func_name] = True
@@ -934,7 +961,18 @@ def _flare_return(value_fn):
 
     if ret_anno is None or ret_anno == type(None):
         if value is not None:
-            raise TypeError(f"Function {func_name} returned a value but has no return type annotation")
+            if isinstance(value, int):
+                _runcmd(f"return {value}")
+                return
+            elif hasattr(type(value), "__name__") and type(value).__name__ in ("score", "fixed", "_PrecisionScore"):
+                value._check_addr()
+                _runcmd(f"return run scoreboard players get {addr(value)}")
+                return
+            elif func_name.endswith(":__init__"):
+                _runcmd("return 1")
+                return
+            else:
+                raise TypeError(f"Function {func_name} returned a value but has no return type annotation")
         _runcmd("return 1")
         return
 

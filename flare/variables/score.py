@@ -8,7 +8,7 @@ from typing import Any
 
 from .core import is_lazy, addr, FlareValue
 from .. import context as ctx
-from ..context import (_runcmd, temp_obj, constant_obj, constants, vars_obj)
+from ..context import _runcmd, temp_obj, constant_obj, constants
 
 INT32_LIMIT = (2 ** 31) - 1
 
@@ -71,18 +71,18 @@ class score(FlareValue):
         return score(addr=f"{prefix}_{ctx.next_temp_id()}", multiplier=self._multiplier)
 
     def _create_var(self, varid: str):
-        return score(addr=f"{varid} {vars_obj}", multiplier=self._multiplier)
+        return score(addr=ctx.get_score_var_addr(varid), multiplier=self._multiplier)
 
     def __icopy__(self, varid: str, is_recursive: bool = False):
         if self._addr is None:
-            self._objective = vars_obj
-            self._name = f"{varid}"
-            self._addr = f"{self._name} {self._objective}"
+            self._addr = ctx.get_score_var_addr(varid)
+            parts = self._addr.split(" ", 1)
+            self._name, self._objective = parts[0], parts[1]
             ctx.ensure_objective(self._objective)
             if self._value_to_set is not None:
                 self[:] = self._value_to_set
         else:
-            dest = type(self)(addr=f"{varid} {vars_obj}", multiplier=self._multiplier)
+            dest = type(self)(addr=ctx.get_score_var_addr(varid), multiplier=self._multiplier)
             dest[:] = self
             return dest
         return self
@@ -212,7 +212,7 @@ class score(FlareValue):
         x %= 2 * math.pi
 
         is_neg = score(0, addr="#neg_fastsin", multiplier=1.0)
-        ScoreIfScore(x, ">", self._num(math.pi)).then([lambda: is_neg.__iset__(1), lambda: x.__isub__(math.pi)])
+        ScoreIfScore(x, ">", self._num(math.pi)).then(lambda: [is_neg.__iset__(1), x.__isub__(math.pi)])
 
         term = x * (math.pi - x)
 
@@ -611,7 +611,7 @@ class score(FlareValue):
             return f'score[{self._multiplier}](addr="{addr(self)}")'
         return f'score(addr="{addr(self)}")'
 
-    def __gt__(self, other):
+    def __gt__(self, other) -> Any:
         from ..control_flow import ScoreIfMatches
 
         if isinstance(other, (int, float)):
@@ -620,7 +620,7 @@ class score(FlareValue):
             return ScoreIfMatches(self, (adjusted_val, inf))
         return super().__gt__(other)
 
-    def __ge__(self, other):
+    def __ge__(self, other) -> Any:
         from ..control_flow import ScoreIfMatches
 
         if isinstance(other, (int, float)):
@@ -629,7 +629,7 @@ class score(FlareValue):
             return ScoreIfMatches(self, (adjusted_val, inf))
         return super().__ge__(other)
 
-    def __lt__(self, other):
+    def __lt__(self, other) -> Any:
         from ..control_flow import ScoreIfMatches
 
         if isinstance(other, (int, float)):
@@ -638,7 +638,7 @@ class score(FlareValue):
             return ScoreIfMatches(self, (-inf, adjusted_val))
         return super().__lt__(other)
 
-    def __le__(self, other):
+    def __le__(self, other) -> Any:
         from ..control_flow import ScoreIfMatches
 
         if isinstance(other, (int, float)):
@@ -647,7 +647,7 @@ class score(FlareValue):
             return ScoreIfMatches(self, (-inf, adjusted_val))
         return super().__le__(other)
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> Any:
         from ..control_flow import ScoreIfMatches
 
         if isinstance(other, (int, float)):
@@ -656,7 +656,7 @@ class score(FlareValue):
             return ScoreIfMatches(self, adjusted_val)
         return super().__eq__(other)
 
-    def __ne__(self, other):
+    def __ne__(self, other) -> Any:
         from ..control_flow import ScoreUnlessMatches
 
         if isinstance(other, (int, float)):

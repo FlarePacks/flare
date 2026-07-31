@@ -4,6 +4,7 @@ import re
 import tokenize
 
 import flare
+from flare.context import FlareReturnException
 
 
 class CallGraphAnalyzer(ast.NodeVisitor):
@@ -152,6 +153,75 @@ class FlareTransformer(ast.NodeTransformer):
         funcs.append(call_expr)
 
         return funcs
+
+    def visit_Match(self, node):
+        subj_name = self.gen_name()
+        subj_assign = ast.Assign(targets=[ast.Name(id=subj_name, ctx=ast.Store())], value=node.subject)
+        ast.copy_location(subj_assign, node)
+        subj_load = lambda: ast.Name(id=subj_name, ctx=ast.Load())
+
+        def _build_pattern_cond(pattern):
+            if isinstance(pattern, ast.MatchValue):
+                cmp = ast.Compare(left=subj_load(), ops=[ast.Eq()], comparators=[pattern.value])
+                ast.copy_location(cmp, pattern)
+                return cmp
+            elif isinstance(pattern, ast.MatchSingleton):
+                cmp = ast.Compare(left=subj_load(), ops=[ast.Eq()], comparators=[ast.Constant(value=pattern.value)])
+                ast.copy_location(cmp, pattern)
+                return cmp
+            elif isinstance(pattern, ast.MatchOr):
+                conds = [_build_pattern_cond(p) for p in pattern.patterns]
+                conds = [c for c in conds if c is not None]
+                if not conds:
+                    return None
+                if len(conds) == 1:
+                    return conds[0]
+                res = ast.BoolOp(op=ast.Or(), values=conds)
+                ast.copy_location(res, pattern)
+                return res
+            elif isinstance(pattern, ast.MatchAs):
+                sub_cond = _build_pattern_cond(pattern.pattern) if pattern.pattern else None
+                return sub_cond
+            return None
+
+        first_if = None
+        current_if = None
+
+        for case in node.cases:
+            body = list(case.body)
+            if isinstance(case.pattern, ast.MatchAs) and case.pattern.name:
+                bind_assign = ast.Assign(targets=[ast.Name(id=case.pattern.name, ctx=ast.Store())], value=subj_load())
+                ast.copy_location(bind_assign, case.pattern)
+                body.insert(0, bind_assign)
+
+            cond = _build_pattern_cond(case.pattern)
+
+            if case.guard:
+                if cond is None:
+                    cond = case.guard
+                else:
+                    cond = ast.BoolOp(op=ast.And(), values=[cond, case.guard])
+                    ast.copy_location(cond, case.guard)
+
+            if cond is None:
+                if current_if is not None:
+                    current_if.orelse = body
+                break
+            else:
+                if_node = ast.If(test=cond, body=body, orelse=[])
+                ast.copy_location(if_node, case)
+                if first_if is None:
+                    first_if = if_node
+                else:
+                    current_if.orelse = [if_node]
+                current_if = if_node
+
+        if first_if is None:
+            return [subj_assign] + (current_if.orelse if current_if else [])
+
+        self.generic_visit(subj_assign)
+        transformed_if = self.visit_If(first_if)
+        return [subj_assign] + transformed_if
 
     def visit_Break(self, node):
         call_expr = ast.Expr(value=ast.Call(func=ast.Name(id="_flare_break", ctx=ast.Load()), args=[], keywords=[]))
@@ -452,9 +522,6 @@ class FlareTransformer(ast.NodeTransformer):
     def visit_Return(self, node):
         self.generic_visit(node)
 
-        if not self.in_flare_func:
-            return node
-
         value = node.value if node.value is not None else ast.Constant(value=None)
 
         lambda_node = ast.Lambda(
@@ -565,6 +632,47 @@ def evaluate_implicit_coord(seq) -> bool:
                 return True
 
     return False
+
+
+PYTHON_KEYWORDS = {"False", "None", "True", "and", "as", "assert", "async", "await", "break", "case", "class",
+                   "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if",
+                   "import", "in", "is", "lambda", "match", "nonlocal", "not", "or", "pass", "raise", "return", "try",
+                   "while", "with", "yield"}
+
+
+def emit_target_nbt_addr(target_type, target_str, path_tokens, out_tokens, type_args_tokens=None):
+    path_str = ""
+    for pt in path_tokens:
+        if pt.type == tokenize.OP and pt.string == ".":
+            path_str += "."
+        elif pt.type == tokenize.STRING:
+            try:
+                val = ast.literal_eval(pt.string)
+            except Exception:
+                val = pt.string.strip('"').strip("'")
+            path_str += str(val)
+        else:
+            path_str += pt.string
+
+    target_clean = target_str.strip('"').strip("'")
+    if path_str:
+        addr_str = f"{target_type} {target_clean} {path_str}"
+    else:
+        addr_str = f"{target_type} {target_clean}"
+
+    escaped = addr_str.replace('"', '\\"')
+    out_tokens.append((tokenize.NAME, "nbt"))
+    out_tokens.append((tokenize.OP, "("))
+    out_tokens.append((tokenize.NAME, "addr"))
+    out_tokens.append((tokenize.OP, "="))
+    out_tokens.append((tokenize.STRING, f'"{escaped}"'))
+    out_tokens.append((tokenize.OP, ")"))
+
+    if type_args_tokens:
+        out_tokens.append((tokenize.OP, "["))
+        for tt in type_args_tokens:
+            out_tokens.append((tt.type, tt.string))
+        out_tokens.append((tokenize.OP, "]"))
 
 
 def preprocess_minecraft_commands(source: str) -> str:
@@ -1106,15 +1214,111 @@ def preprocess_minecraft_commands(source: str) -> str:
             if not is_decorator:
                 if i + 1 < len(tokens) and tokens[i + 1].type == tokenize.NAME:
                     name_tok = tokens[i + 1]
-                    selector_str = "@" + name_tok.string
-                    i += 2
+                    selector_base = "@" + name_tok.string
+                    selector_end_idx = i + 2
 
-                    out_tokens.append((tokenize.NAME, "selector"))
-                    out_tokens.append((tokenize.OP, "("))
-                    escaped = selector_str.replace('"', '\\"')
-                    out_tokens.append((tokenize.STRING, f'"{escaped}"'))
-                    out_tokens.append((tokenize.OP, ")"))
-                    continue
+                    selector_args_str = ""
+                    has_bracket_args = False
+                    if selector_end_idx < len(tokens) and tokens[selector_end_idx].type == tokenize.OP and tokens[
+                        selector_end_idx].string == "[":
+                        bracket_i = selector_end_idx + 1
+                        temp_bracket = 1
+                        matching_bracket_i = -1
+                        while bracket_i < len(tokens) and temp_bracket > 0:
+                            t = tokens[bracket_i]
+                            if t.type == tokenize.OP:
+                                if t.string in ("[", "{", "("):
+                                    temp_bracket += 1
+                                elif t.string in ("]", "}", ")"):
+                                    temp_bracket -= 1
+                                    if temp_bracket == 0 and t.string == "]":
+                                        matching_bracket_i = bracket_i
+                            bracket_i += 1
+
+                        if matching_bracket_i != -1:
+                            has_bracket_args = True
+                            selector_args_str = "".join(
+                                t.string for t in tokens[selector_end_idx + 1:matching_bracket_i])
+                            selector_end_idx = matching_bracket_i + 1
+
+                    full_selector_str = selector_base + (f"[{selector_args_str}]" if has_bracket_args else "")
+
+                    next_tok_idx = selector_end_idx
+                    has_objective = False
+                    obj_str = ""
+                    end_obj_idx = next_tok_idx
+
+                    if next_tok_idx < len(tokens):
+                        start_tok = tokens[next_tok_idx]
+
+                        is_obj_start = False
+                        if start_tok.type == tokenize.NAME and start_tok.string not in ("in", "is", "if", "else", "for",
+                                                                                        "while", "and", "or", "not",
+                                                                                        "def", "class", "import",
+                                                                                        "from", "return"):
+                            is_obj_start = True
+                        elif start_tok.type == tokenize.NUMBER:
+                            is_obj_start = True
+                        elif start_tok.type == tokenize.OP and start_tok.string in ("!", "-", "+", "_"):
+                            is_obj_start = True
+                        elif start_tok.type == tokenize.OP and start_tok.string == ".":
+                            prev_end = tokens[selector_end_idx - 1].end
+                            if start_tok.start != prev_end:
+                                is_obj_start = True
+
+                        if is_obj_start:
+                            has_objective = True
+                            obj_str = start_tok.string
+                            last_end = start_tok.end
+                            end_obj_idx = next_tok_idx + 1
+
+                            while end_obj_idx < len(tokens):
+                                nt = tokens[end_obj_idx]
+                                if nt.start == last_end and nt.type in (tokenize.NAME, tokenize.NUMBER, tokenize.OP):
+                                    if nt.type == tokenize.OP and nt.string in (",", ";", "(", ")", "[", "]", "{", "}",
+                                                                                "=", "==", "!=", "<", ">", "<=", ">=",
+                                                                                ":"):
+                                        break
+                                    obj_str += nt.string
+                                    last_end = nt.end
+                                    end_obj_idx += 1
+                                else:
+                                    break
+
+                    if has_objective:
+                        addr_str = f"{full_selector_str} {obj_str}"
+                        escaped = addr_str.replace('"', '\\"')
+                        out_tokens.append((tokenize.NAME, "score"))
+                        out_tokens.append((tokenize.OP, "("))
+                        out_tokens.append((tokenize.NAME, "addr"))
+                        out_tokens.append((tokenize.OP, "="))
+                        out_tokens.append((tokenize.STRING, f'"{escaped}"'))
+                        out_tokens.append((tokenize.OP, ")"))
+                        i = end_obj_idx
+                        continue
+                    else:
+                        if has_bracket_args:
+                            escaped_sel = selector_base.replace('"', '\\"')
+                            escaped_args = selector_args_str.replace('"', '\\"')
+                            out_tokens.append((tokenize.NAME, "selector"))
+                            out_tokens.append((tokenize.OP, "("))
+                            out_tokens.append((tokenize.STRING, f'"{escaped_sel}"'))
+                            out_tokens.append((tokenize.OP, ")"))
+                            out_tokens.append((tokenize.OP, "."))
+                            out_tokens.append((tokenize.NAME, "__selector_index__"))
+                            out_tokens.append((tokenize.OP, "("))
+                            out_tokens.append((tokenize.STRING, f'"{escaped_args}"'))
+                            out_tokens.append((tokenize.OP, ")"))
+                            i = selector_end_idx
+                            continue
+                        else:
+                            out_tokens.append((tokenize.NAME, "selector"))
+                            out_tokens.append((tokenize.OP, "("))
+                            escaped = selector_base.replace('"', '\\"')
+                            out_tokens.append((tokenize.STRING, f'"{escaped}"'))
+                            out_tokens.append((tokenize.OP, ")"))
+                            i = i + 2
+                            continue
 
         if tok.type == tokenize.OP and tok.string == "[":
             has_selector_arg = False
@@ -1148,12 +1352,280 @@ def preprocess_minecraft_commands(source: str) -> str:
                 out_tokens.append((tokenize.OP, "."))
                 out_tokens.append((tokenize.NAME, "__selector_index__"))
                 out_tokens.append((tokenize.OP, "("))
-                escaped = inner_str.replace('"', '\\"')
                 out_tokens.append((tokenize.STRING, f'"{escaped}"'))
                 out_tokens.append((tokenize.OP, ")"))
 
                 i = matching_bracket_i + 1
                 continue
+
+        if tok.type == tokenize.NAME and tok.string == "storage":
+            next_idx = i + 1
+            type_args_tokens = None
+            if next_idx < len(tokens) and tokens[next_idx].start == tok.end and tokens[next_idx].type == tokenize.OP and \
+                    tokens[next_idx].string == "[":
+                bracket_i = next_idx + 1
+                temp_bracket = 1
+                matching_bracket_i = -1
+                while bracket_i < len(tokens) and temp_bracket > 0:
+                    t = tokens[bracket_i]
+                    if t.type == tokenize.OP:
+                        if t.string in ("[", "{", "("):
+                            temp_bracket += 1
+                        elif t.string in ("]", "}", ")"):
+                            temp_bracket -= 1
+                            if temp_bracket == 0 and t.string == "]":
+                                matching_bracket_i = bracket_i
+                    bracket_i += 1
+                if matching_bracket_i != -1:
+                    type_args_tokens = tokens[next_idx + 1:matching_bracket_i]
+                    next_idx = matching_bracket_i + 1
+
+            if next_idx < len(tokens):
+                first_tok = tokens[next_idx]
+                last_end = tokens[next_idx - 1].end if next_idx > i + 1 else tok.end
+
+                if first_tok.line == tok.line and first_tok.start > last_end:
+                    if first_tok.type in (tokenize.NAME, tokenize.NUMBER, tokenize.STRING) or (
+                            first_tok.type == tokenize.OP and first_tok.string in ("!", "-", "+", "_")):
+                        target_tokens = [first_tok]
+                        target_end = first_tok.end
+                        scan = next_idx + 1
+
+                        while scan < len(tokens):
+                            st = tokens[scan]
+                            if st.start == target_end and st.type in (tokenize.NAME, tokenize.NUMBER, tokenize.OP):
+                                if st.type == tokenize.OP and st.string in (",", ";", "(", ")", "[", "]", "{", "}", "=",
+                                                                            "==", "!=", "<", ">", "<=", ">="):
+                                    break
+                                target_tokens.append(st)
+                                target_end = st.end
+                                scan += 1
+                            else:
+                                break
+
+                        target_str = "".join(t.string for t in target_tokens)
+
+                        path_tokens = []
+                        if scan < len(tokens):
+                            path_start_tok = tokens[scan]
+                            if path_start_tok.line == tok.line and path_start_tok.start > target_end:
+                                if (
+                                        path_start_tok.type == tokenize.NAME and path_start_tok.string not in PYTHON_KEYWORDS) or path_start_tok.type in (
+                                        tokenize.NUMBER, tokenize.STRING):
+                                    path_curr = scan
+                                    last_path_end = path_start_tok.start
+
+                                    while path_curr < len(tokens):
+                                        pt = tokens[path_curr]
+                                        if pt.line != tok.line or pt.type in (tokenize.NEWLINE, tokenize.NL,
+                                                                              tokenize.ENDMARKER):
+                                            break
+                                        if path_curr > scan and pt.start != last_path_end:
+                                            if tokens[path_curr - 1].type == tokenize.OP and tokens[
+                                                path_curr - 1].string == ".":
+                                                pass
+                                            else:
+                                                break
+
+                                        if pt.type == tokenize.OP and pt.string not in (".", "!", "-", "+", "_"):
+                                            break
+                                        if pt.type == tokenize.NAME and pt.string in PYTHON_KEYWORDS:
+                                            break
+
+                                        path_tokens.append(pt)
+                                        last_path_end = pt.end
+                                        path_curr += 1
+                                    scan = path_curr
+
+                        emit_target_nbt_addr("storage", target_str, path_tokens, out_tokens, type_args_tokens)
+                        i = scan
+                        continue
+
+        if tok.type == tokenize.NAME and tok.string == "entity":
+            next_idx = i + 1
+            type_args_tokens = None
+            if next_idx < len(tokens) and tokens[next_idx].start == tok.end and tokens[next_idx].type == tokenize.OP and \
+                    tokens[next_idx].string == "[":
+                bracket_i = next_idx + 1
+                temp_bracket = 1
+                matching_bracket_i = -1
+                while bracket_i < len(tokens) and temp_bracket > 0:
+                    t = tokens[bracket_i]
+                    if t.type == tokenize.OP:
+                        if t.string in ("[", "{", "("):
+                            temp_bracket += 1
+                        elif t.string in ("]", "}", ")"):
+                            temp_bracket -= 1
+                            if temp_bracket == 0 and t.string == "]":
+                                matching_bracket_i = bracket_i
+                    bracket_i += 1
+                if matching_bracket_i != -1:
+                    type_args_tokens = tokens[next_idx + 1:matching_bracket_i]
+                    next_idx = matching_bracket_i + 1
+
+            if next_idx < len(tokens):
+                first_tok = tokens[next_idx]
+                last_end = tokens[next_idx - 1].end if next_idx > i + 1 else tok.end
+                if first_tok.line == tok.line and first_tok.start > last_end:
+                    if first_tok.type == tokenize.OP and first_tok.string == "@":
+                        if next_idx + 1 < len(tokens) and tokens[next_idx + 1].type == tokenize.NAME:
+                            sel_name = tokens[next_idx + 1].string
+                            selector_base = "@" + sel_name
+                            sel_end_idx = next_idx + 2
+
+                            has_bracket = False
+                            sel_args_str = ""
+                            if sel_end_idx < len(tokens) and tokens[sel_end_idx].type == tokenize.OP and tokens[
+                                sel_end_idx].string == "[":
+                                bracket_i = sel_end_idx + 1
+                                temp_bracket = 1
+                                matching_bracket_i = -1
+                                while bracket_i < len(tokens) and temp_bracket > 0:
+                                    t = tokens[bracket_i]
+                                    if t.type == tokenize.OP:
+                                        if t.string in ("[", "{", "("):
+                                            temp_bracket += 1
+                                        elif t.string in ("]", "}", ")"):
+                                            temp_bracket -= 1
+                                            if temp_bracket == 0 and t.string == "]":
+                                                matching_bracket_i = bracket_i
+                                    bracket_i += 1
+                                if matching_bracket_i != -1:
+                                    has_bracket = True
+                                    sel_args_str = "".join(t.string for t in tokens[sel_end_idx + 1:matching_bracket_i])
+                                    sel_end_idx = matching_bracket_i + 1
+
+                            full_selector_str = selector_base + (f"[{sel_args_str}]" if has_bracket else "")
+
+                            path_tokens = []
+                            scan = sel_end_idx
+                            if scan < len(tokens):
+                                path_start_tok = tokens[scan]
+                                if path_start_tok.line == tok.line and path_start_tok.start > tokens[
+                                    sel_end_idx - 1].end:
+                                    if (
+                                            path_start_tok.type == tokenize.NAME and path_start_tok.string not in PYTHON_KEYWORDS) or path_start_tok.type in (
+                                            tokenize.NUMBER, tokenize.STRING):
+                                        path_curr = scan
+                                        last_path_end = path_start_tok.start
+                                        while path_curr < len(tokens):
+                                            pt = tokens[path_curr]
+                                            if pt.line != tok.line or pt.type in (tokenize.NEWLINE, tokenize.NL,
+                                                                                  tokenize.ENDMARKER):
+                                                break
+                                            if path_curr > scan and pt.start != last_path_end:
+                                                if tokens[path_curr - 1].type == tokenize.OP and tokens[
+                                                    path_curr - 1].string == ".":
+                                                    pass
+                                                else:
+                                                    break
+                                            if pt.type == tokenize.OP and pt.string not in (".", "!", "-", "+", "_"):
+                                                break
+                                            if pt.type == tokenize.NAME and pt.string in PYTHON_KEYWORDS:
+                                                break
+                                            path_tokens.append(pt)
+                                            last_path_end = pt.end
+                                            path_curr += 1
+                                        scan = path_curr
+
+                            emit_target_nbt_addr("entity", full_selector_str, path_tokens, out_tokens, type_args_tokens)
+                            i = scan
+                            continue
+
+        if tok.type == tokenize.NAME and tok.string == "block":
+            next_idx = i + 1
+            type_args_tokens = None
+            if next_idx < len(tokens) and tokens[next_idx].start == tok.end and tokens[next_idx].type == tokenize.OP and \
+                    tokens[next_idx].string == "[":
+                bracket_i = next_idx + 1
+                temp_bracket = 1
+                matching_bracket_i = -1
+                while bracket_i < len(tokens) and temp_bracket > 0:
+                    t = tokens[bracket_i]
+                    if t.type == tokenize.OP:
+                        if t.string in ("[", "{", "("):
+                            temp_bracket += 1
+                        elif t.string in ("]", "}", ")"):
+                            temp_bracket -= 1
+                            if temp_bracket == 0 and t.string == "]":
+                                matching_bracket_i = bracket_i
+                    bracket_i += 1
+                if matching_bracket_i != -1:
+                    type_args_tokens = tokens[next_idx + 1:matching_bracket_i]
+                    next_idx = matching_bracket_i + 1
+
+            if next_idx < len(tokens):
+                first_tok = tokens[next_idx]
+                last_end = tokens[next_idx - 1].end if next_idx > i + 1 else tok.end
+                if first_tok.line == tok.line and first_tok.start > last_end:
+                    curr_c = next_idx
+
+                    if first_tok.type == tokenize.NAME and first_tok.string == "b" and next_idx + 1 < len(tokens) and \
+                            tokens[next_idx + 1].start == first_tok.end and tokens[next_idx + 1].string in ("~", "^"):
+                        curr_c = next_idx + 1
+
+                    coord_parts = []
+                    while curr_c < len(tokens) and len(coord_parts) < 3:
+                        ct = tokens[curr_c]
+                        if ct.line != tok.line or ct.type in (tokenize.NEWLINE, tokenize.NL, tokenize.ENDMARKER):
+                            break
+
+                        axis_tokens = [ct]
+                        axis_end = ct.end
+                        scan_a = curr_c + 1
+                        while scan_a < len(tokens):
+                            st = tokens[scan_a]
+                            if st.start == axis_end and st.type in (tokenize.NAME, tokenize.NUMBER,
+                                                                    tokenize.OP) and st.string != ".":
+                                axis_tokens.append(st)
+                                axis_end = st.end
+                                scan_a += 1
+                            else:
+                                break
+
+                        part_str = "".join(t.string for t in axis_tokens)
+                        coord_parts.append(part_str)
+                        curr_c = scan_a
+
+                        if curr_c < len(tokens) and tokens[curr_c].start > axis_end:
+                            pass
+
+                    if len(coord_parts) == 3:
+                        coord_str = " ".join(coord_parts)
+
+                        path_tokens = []
+                        scan = curr_c
+                        if scan < len(tokens):
+                            path_start_tok = tokens[scan]
+                            if path_start_tok.line == tok.line and path_start_tok.start > tokens[curr_c - 1].end:
+                                if (
+                                        path_start_tok.type == tokenize.NAME and path_start_tok.string not in PYTHON_KEYWORDS) or path_start_tok.type in (
+                                        tokenize.NUMBER, tokenize.STRING):
+                                    path_curr = scan
+                                    last_path_end = path_start_tok.start
+                                    while path_curr < len(tokens):
+                                        pt = tokens[path_curr]
+                                        if pt.line != tok.line or pt.type in (tokenize.NEWLINE, tokenize.NL,
+                                                                              tokenize.ENDMARKER):
+                                            break
+                                        if path_curr > scan and pt.start != last_path_end:
+                                            if tokens[path_curr - 1].type == tokenize.OP and tokens[
+                                                path_curr - 1].string == ".":
+                                                pass
+                                            else:
+                                                break
+                                        if pt.type == tokenize.OP and pt.string not in (".", "!", "-", "+", "_"):
+                                            break
+                                        if pt.type == tokenize.NAME and pt.string in PYTHON_KEYWORDS:
+                                            break
+                                        path_tokens.append(pt)
+                                        last_path_end = pt.end
+                                        path_curr += 1
+                                    scan = path_curr
+
+                        emit_target_nbt_addr("block", coord_str, path_tokens, out_tokens, type_args_tokens)
+                        i = scan
+                        continue
 
         out_tokens.append((tok.type, tok.string))
         i += 1
@@ -1194,5 +1666,8 @@ def transform_source(source: str, filename: str = "<compiled>"):
 def process_and_exec(source: str, global_env: dict, filename: str = "<compiled>"):
     setup_global_env(global_env)
     code_obj, tree = transform_source(source, filename)
-    exec(code_obj, global_env)
+    try:
+        exec(code_obj, global_env)
+    except FlareReturnException:
+        pass
     return code_obj, tree

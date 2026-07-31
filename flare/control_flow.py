@@ -78,7 +78,7 @@ class ScoreIf:
 
 
 class ScoreIfMatches(ScoreIf):
-    def __init__(self, t: "flare.variables.score", rng: tuple[float, float] | float):
+    def __init__(self, t: Any, rng: tuple[float, float] | float):
         super().__init__([])
         self.t = t
         if isinstance(rng, (int, float)): rng = (rng, rng)
@@ -105,7 +105,7 @@ class ScoreIfMatches(ScoreIf):
 
 
 class ScoreUnlessMatches(ScoreIf):
-    def __init__(self, t, rng):
+    def __init__(self, t: Any, rng: Any):
         super().__init__([])
         self.t = t
         if isinstance(rng, (int, float)): rng = (rng, rng)
@@ -243,119 +243,47 @@ class expand:
 
 
 def _flare_if(*args):
-    from .variables.score import score
+    from .variables.score import score, addr
     from .compiler import _flatten_and
 
     n = len(args) // 2
     conditions = args[:n]
     bodies = args[n:]
 
-    elif_temp = None
-    has_else_or_elif = len(conditions) > 1 or conditions[0] is None
+    has_else_or_elif = len(conditions) > 1 or conditions[-1] is None
 
-    if has_else_or_elif:
-        elif_temp = score(addr=f"#elif{next_temp_id()}")
-        elif_temp.__iset__(0)
-
-    is_dynamic_chain = None
-
-    for cond_func, body_func in zip(conditions, bodies):
-        if cond_func is None:
-            if elif_temp is not None:
-                func_name = ctx.get_generated_func_name("generated")
-                with push_context(func_name):
-                    try:
-                        body_func()
-                    except ctx.FlareReturnException:
-                        pass
-                if ctx.files.get(func_name):
-                    if len(ctx.files[func_name]) == 1:
-                        cmd = ctx.files[func_name][0]
-                        del ctx.files[func_name]
-                        ctx._runcmd(ctx.combine_execute(f"execute if score {addr(elif_temp)} matches 0", cmd))
-                    else:
-                        _invoke_block(func_name, f"if score {addr(elif_temp)} matches 0")
-            else:
-                body_func()
-            break
+    if not has_else_or_elif:
+        cond_func = conditions[0]
+        body_func = bodies[0]
 
         raw_cond = cond_func()
         is_expand = isinstance(raw_cond, expand)
         cond = raw_cond.cond if is_expand else raw_cond
 
-        current_is_dynamic = not isinstance(cond, bool)
-        if is_dynamic_chain is None:
-            is_dynamic_chain = current_is_dynamic
-        elif is_dynamic_chain != current_is_dynamic:
-            raise TypeError(
-                "Cannot mix compile-time (static) and run-time (dynamic) conditions in the same if/elif chain. Please use nested if statements instead.")
-
         if isinstance(cond, bool):
-            if not cond:
-                continue
-            else:
-                if elif_temp is not None:
-                    if is_expand:
-                        start_len = len(ctx.files[ctx.current_file])
-                        try:
-                            body_func()
-                        except ctx.FlareReturnException:
-                            pass
-
-                        _runcmd(f"scoreboard players set {addr(elif_temp)} 1")
-
-                        prefix = f"execute if score {addr(elif_temp)} matches 0"
-                        for i in range(start_len, len(ctx.files[ctx.current_file])):
-                            cmd = ctx.files[ctx.current_file][i]
-                            ctx.files[ctx.current_file][i] = ctx.combine_execute(prefix, cmd)
-                    else:
-                        func_name = ctx.get_generated_func_name("generated")
-                        with push_context(func_name):
-                            try:
-                                body_func()
-                            except ctx.FlareReturnException:
-                                pass
-                        if ctx.files.get(func_name):
-                            if len(ctx.files[func_name]) == 1:
-                                cmd = ctx.files[func_name][0]
-                                del ctx.files[func_name]
-                                _runcmd(ctx.combine_execute(f"execute if score {addr(elif_temp)} matches 0", cmd))
-                            else:
-                                _invoke_block(func_name, f"if score {addr(elif_temp)} matches 0")
-                else:
-                    body_func()
-                break
+            if cond:
+                body_func()
+            return
 
         conds = _flatten_and(cond)
         prefix = f"execute {' '.join(conds)}"
 
-        if elif_temp is not None:
-            prefix = f"execute if score {addr(elif_temp)} matches 0 {' '.join(conds)}"
-
         if is_expand:
             start_len = len(ctx.files[ctx.current_file])
-
             try:
                 body_func()
             except ctx.FlareReturnException:
                 pass
-
-            if elif_temp is not None:
-                _runcmd(f"scoreboard players set {addr(elif_temp)} 1")
-
             for i in range(start_len, len(ctx.files[ctx.current_file])):
                 cmd = ctx.files[ctx.current_file][i]
                 ctx.files[ctx.current_file][i] = ctx.combine_execute(prefix, cmd)
         else:
             func_name = ctx.get_generated_func_name("generated")
             with push_context(func_name):
-                if elif_temp is not None:
-                    _runcmd(f"scoreboard players set {addr(elif_temp)} 1")
                 try:
                     body_func()
                 except ctx.FlareReturnException:
                     pass
-
             if ctx.files.get(func_name):
                 if len(ctx.files[func_name]) == 1:
                     cmd = ctx.files[func_name][0]
@@ -363,17 +291,91 @@ def _flare_if(*args):
                     _runcmd(ctx.combine_execute(prefix, cmd))
                 else:
                     _invoke_block(func_name, prefix[8:] if prefix.startswith("execute ") else "")
+        return
+
+    if_func_name = ctx.get_generated_func_name("if")
+
+    parent_logical = ctx._logical_func
+    branch_had_return = False
+
+    with push_context(if_func_name):
+        ctx._logical_func = parent_logical
+        for cond_func, body_func in zip(conditions, bodies):
+            if cond_func is None:
+                b_start_has_ret = ctx.has_returns.get(parent_logical, False) if parent_logical else False
+                try:
+                    body_func()
+                except ctx.FlareReturnException:
+                    pass
+                if parent_logical and ctx.has_returns.get(parent_logical, False) and not b_start_has_ret:
+                    branch_had_return = True
+                break
+
+            raw_cond = cond_func()
+            is_expand = isinstance(raw_cond, expand)
+            cond = raw_cond.cond if is_expand else raw_cond
+
+            if isinstance(cond, bool):
+                if not cond:
+                    continue
+                else:
+                    b_start_has_ret = ctx.has_returns.get(parent_logical, False) if parent_logical else False
+                    try:
+                        body_func()
+                    except ctx.FlareReturnException:
+                        pass
+                    if parent_logical and ctx.has_returns.get(parent_logical, False) and not b_start_has_ret:
+                        branch_had_return = True
+                    break
+
+            conds = _flatten_and(cond)
+            cond_prefix = f"execute {' '.join(conds)}"
+
+            sub_body_name = ctx.get_generated_func_name("if_branch")
+            b_start_has_ret = ctx.has_returns.get(parent_logical, False) if parent_logical else False
+            with push_context(sub_body_name):
+                ctx._logical_func = parent_logical
+                try:
+                    body_func()
+                except ctx.FlareReturnException:
+                    pass
+
+            if parent_logical and ctx.has_returns.get(parent_logical, False) and not b_start_has_ret:
+                branch_had_return = True
+
+            emitted = ctx.files.get(sub_body_name, [])
+            if not emitted:
+                if sub_body_name in ctx.files:
+                    del ctx.files[sub_body_name]
+                _runcmd(f"{cond_prefix} run return 1")
+            elif len(emitted) == 1:
+                cmd = emitted[0]
+                del ctx.files[sub_body_name]
+                if cmd.startswith("return "):
+                    _runcmd(f"{cond_prefix} run {cmd}")
+                else:
+                    _runcmd(f"{cond_prefix} run return run {cmd}")
+            else:
+                _runcmd(f"{cond_prefix} run return run function {sub_body_name}")
+
+    if ctx.files.get(if_func_name):
+        if branch_had_return:
+            ret_score = score(addr=f"#ret_{next_temp_id()}")
+            _runcmd(f"execute store result score {addr(ret_score)} run function {if_func_name}")
+            _runcmd(
+                f"execute if score {addr(ret_score)} matches 1.. run return run scoreboard players get {addr(ret_score)}")
+        else:
+            _runcmd(f"function {if_func_name}")
 
 
 def _flare_while(cond_func, body_func, orelse_func=None, has_break=False, has_continue=False, namespace=None):
     from .compiler import _flatten_and  # avoid circular import
     from .variables.score import score
-    ns = namespace or ctx._current_namespace
-    func_name = ctx.get_generated_func_name("while")
+    func_name = ctx.get_generated_func_name("while", namespace=namespace)
 
     with push_context(func_name):
         if has_break or has_continue:
-            func_body = ctx.get_generated_func_name("while_body")
+            func_body = ctx.get_generated_func_name("while_body", namespace=namespace)
             with push_context(func_body):
                 try:
                     body_func()
@@ -392,7 +394,6 @@ def _flare_while(cond_func, body_func, orelse_func=None, has_break=False, has_co
 
         cond = cond_func()
         conds = _flatten_and(cond)
-        prefix = f"execute {' '.join(conds)}"
         _invoke_block(func_name, " ".join(conds))
 
     if has_break:
@@ -406,7 +407,7 @@ def _flare_while(cond_func, body_func, orelse_func=None, has_break=False, has_co
 
     if orelse_func:
         if has_break:
-            orelse_name = ctx.get_generated_func_name("while_else")
+            orelse_name = ctx.get_generated_func_name("while_else", namespace=namespace)
             with push_context(orelse_name):
                 orelse_func()
             _runcmd(f"execute if score !break {temp_obj} matches 0 run function {orelse_name}")
@@ -429,7 +430,6 @@ class schedule:
         self._func_name = None
 
     def __with__(self, body_func):
-        ns = ctx._current_namespace
         func_name = ctx.get_generated_func_name("sched")
         self._func_name = func_name
 

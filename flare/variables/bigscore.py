@@ -6,14 +6,14 @@ from .core import UnsupportedOperandError, BinaryOp, FlareValue
 from .score import score
 from .. import context as ctx
 from ..context import temp_obj, ensure_objective
-from ..context import temp_storage, next_temp_id, vars_obj
+from ..context import temp_storage, next_temp_id
 from ..control_flow import ScoreIfMatches
 
 BASE = 10000
 
 
 def _get_temps():
-    return (score(addr="#rem"), score(addr="#val"), score(addr="#carry"), score(addr="#borrow"), score(addr="#mul"))
+    return score(addr="#rem"), score(addr="#val"), score(addr="#carry"), score(addr="#borrow"), score(addr="#mul")
 
 
 class bigscore(FlareValue):
@@ -50,7 +50,7 @@ class bigscore(FlareValue):
                 self[:] = self._value_to_set
 
     def _create_var(self, varid: str):
-        return type(self)(addr=f"{varid} {vars_obj}", size=self.size, multiplier=self._multiplier)
+        return type(self)(addr=ctx.get_score_var_addr(varid), size=self.size, multiplier=self._multiplier)
 
     def _alloc_temp(self, prefix="#temp"):
         return type(self)(addr=f"{prefix}_{next_temp_id()}", size=self.size, multiplier=self._multiplier)
@@ -382,14 +382,14 @@ class bigscore(FlareValue):
 
     def __icopy__(self, varid: str, is_recursive: bool = False):  # noqa
         if self._addr is None:
-            self._objective = vars_obj
-            self._name = f"{varid}"
-            self._addr = f"{self._name} {self._objective}"
+            self._addr = ctx.get_score_var_addr(varid)
+            parts = self._addr.split(" ", 1)
+            self._name, self._objective = parts[0], parts[1]
             ctx.ensure_objective(self._objective)
             if self._value_to_set is not None:
                 self[:] = self._value_to_set
         else:
-            dest = type(self)(addr=f"{varid} {vars_obj}", size=self.size, multiplier=self._multiplier)
+            dest = type(self)(addr=ctx.get_score_var_addr(varid), size=self.size, multiplier=self._multiplier)
             dest[:] = self
             return dest
         return self
@@ -437,7 +437,7 @@ class bigscore(FlareValue):
 
         self._check_addr()
         tid = next_temp_id()
-        started = score(0, addr=f"#print_s_{tid} {vars_obj}")
+        started = score(0, addr=f"#print_s_{tid} {ctx.temp_obj}")
         comps = []
 
         for i in reversed(range(self.size)):

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import inspect
-from typing import Union, Optional, Generic, TypeVar
+from typing import Union, Optional, Generic, TypeVar, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..execute_modifiers import InlineCondition
+    from .selector import selector
 
 import flare.context as context
 from .core import FlareValue, lazify
@@ -363,8 +367,8 @@ class block(FlareValue, Generic[T]):
         context.ensure_objective("flare_blk_pl")
 
         context.files["__flare_stdlib__:block/place/check"] = ["scoreboard players add @s flare_blk_pl 1",
-            "execute unless block ~ ~1 ~ minecraft:air run function __flare_stdlib__:block/place/delete",
-            "execute if block ~ ~1 ~ minecraft:air unless score @s flare_blk_pl matches 10.. run schedule function __flare_stdlib__:block/place/cleanup 1t"]
+                                                               "execute unless block ~ ~1 ~ minecraft:air run function __flare_stdlib__:block/place/delete",
+                                                               "execute if block ~ ~1 ~ minecraft:air unless score @s flare_blk_pl matches 10.. run schedule function __flare_stdlib__:block/place/cleanup 1t"]
         context.files["__flare_stdlib__:block/place/cleanup"] = [
             "execute as @e[type=shulker,tag=flare_blk_pl] at @s run function __flare_stdlib__:block/place/check"]
         context.files["__flare_stdlib__:block/place/delete"] = [
@@ -403,7 +407,8 @@ class block(FlareValue, Generic[T]):
         for val in vals:
             pred_key = f"__flare_stdlib__:predicate/block/states/{state_name}/{str(val).replace('.', '_').replace('-', '_neg_').lower()}.json"
             context.json_files[pred_key] = {"condition": "minecraft:location_check",
-                "predicate": {"block": {"state": {state_name: str(val).lower() if stype == "boolean" else str(val)}}}}
+                                            "predicate": {"block": {"state": {
+                                                state_name: str(val).lower() if stype == "boolean" else str(val)}}}}
 
             if stype == "byte":
                 nbt_val = f"{val}b"
@@ -463,8 +468,8 @@ class block(FlareValue, Generic[T]):
         from ..execute_modifiers import InlineCondition
         return InlineCondition(f"if loaded {self.pos}")
 
-    def add_particles(self, name: str, delta: Union[str, tuple, list] = None, speed: float = None, count: int = None,
-                      mode: str = None, viewers: Union[str, "selector"] = None):
+    def add_particles(self, name: str, delta: str | tuple | list | None = None, speed: float | None = None,
+                      count: int | None = None, mode: str | None = None, viewers: "str | selector | None" = None):
         cmd = f"particle {name} {self.pos}"
 
         if delta is not None or speed is not None or count is not None or mode is not None or viewers is not None:
