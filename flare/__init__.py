@@ -9,7 +9,8 @@ from .command_parser import interpolate_command
 from .compiler import _flatten_and, _eval_to_bool_score, _compile_relational
 from .context import namespace, export, tag, tick, load, push_context, runcommand, files, temp_obj, constant_obj, \
     vars_obj, constants, _flare_assign, _flare_aug_assign, _flare_print, dbg, _flare_return, _flare_in, _flare_notin, \
-    _flare_print as print, style, _flare_enter_scope, _flare_exit_scope, _flare_alone
+    _flare_print as print, style, _flare_enter_scope, _flare_exit_scope, _flare_alone, get_nbt_var_addr, \
+    get_score_var_addr, set_nbt_var_addr_formatter, set_score_var_addr_formatter
 from .control_flow import _flare_if, _flare_while, _flare_for, _flare_not, _flare_with, _flare_as_var, _flare_break, \
     _flare_continue, expand, schedule, _flare_and, _flare_or
 from .event import event, right_click_event, left_click_enchantment
@@ -49,7 +50,8 @@ __all__ = ["round_", "floor", "ceil", "namespace", "export", "tag", "tick", "loa
            "_flare_with", "_flare_as_var", "runcommand", "_flare_return", "_flare_break", "_flare_continue",
            "_flare_in", "_flare_notin", "_flare_enter_scope", "_flare_exit_scope", "_flare_alone",
            "interpolate_command", "FlareTexture", "texture", "add_texture", "edit_texture", "get_texture", "re",
-           "lazy_apply", "Objective", "addr"]
+           "lazy_apply", "Objective", "addr", "get_nbt_var_addr", "get_score_var_addr", "set_nbt_var_addr_formatter",
+           "set_score_var_addr_formatter"]
 
 from .resources import __all__ as _dd_all
 from .generated import events as _events

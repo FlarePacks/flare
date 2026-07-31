@@ -8,7 +8,7 @@ from .nbt import nbt
 from .score import score
 from .. import context as ctx
 from ..context import _invoke_stdlib, temp_storage
-from ..context import temp_obj, vars_obj, next_temp_id
+from ..context import temp_obj, next_temp_id
 from ..control_flow import ScoreIfMatches, ScoreIfScore
 from ..variables import bigscore
 
@@ -36,7 +36,7 @@ class float64(FlareValue):
         return type(self)(addr=f"{prefix}_{ctx.next_temp_id()}")
 
     def _create_var(self, varid: str):
-        return type(self)(addr=f"{varid} {vars_obj}")
+        return type(self)(addr=ctx.get_score_var_addr(varid))
 
     def _parse_addr(self, addr: str):
         parts = addr.rsplit(" ", 1)
@@ -61,12 +61,11 @@ class float64(FlareValue):
 
     def __icopy__(self, varid: str, is_recursive: bool = False):
         if self._addr is None:
-            self._parse_addr(f"{varid} {vars_obj}")
-            ctx.ensure_objective(vars_obj)
+            self._parse_addr(ctx.get_score_var_addr(varid))
             if self._value_to_set is not None:
                 self[:] = self._value_to_set
         else:
-            dest = type(self)(addr=f"{varid} {vars_obj}")
+            dest = type(self)(addr=ctx.get_score_var_addr(varid))
             dest[:] = self
             return dest
         return self
@@ -1027,7 +1026,7 @@ class float64(FlareValue):
         self._check_addr()
         tid = next_temp_id()
 
-        mlo_tmp = score(addr=f"#f64prt_ml_{tid} {vars_obj}")
+        mlo_tmp = score(addr=f"#f64prt_ml_{tid} {ctx.temp_obj}")
         mlo_tmp[:] = self._mant_lo
 
         b = bigscore[16](addr=f"#f64prt_b_{tid}")
@@ -1040,7 +1039,7 @@ class float64(FlareValue):
         mlo_tmp /= 10000
         b.get_limb(2)[:] = mlo_tmp
 
-        mhi_tmp = score(addr=f"#f64prt_mh_{tid} {vars_obj}")
+        mhi_tmp = score(addr=f"#f64prt_mh_{tid} {ctx.temp_obj}")
         mhi_tmp[:] = self._mant_hi
 
         temp_hi = bigscore[16](addr=f"#f64prt_th_{tid}")
@@ -1058,7 +1057,7 @@ class float64(FlareValue):
         b += temp_hi
         b *= bigscore[16](10000000000000000, addr=f"#f64prt_c_{tid}")
 
-        exp_adj = score(addr=f"#f64prt_e_{tid} {vars_obj}")
+        exp_adj = score(addr=f"#f64prt_e_{tid} {ctx.temp_obj}")
         exp_adj[:] = self._exp
         exp_adj -= score(52)
 
@@ -1073,7 +1072,7 @@ class float64(FlareValue):
         ScoreIfMatches(self._sign, 1).then(lambda: f64s.remove())
         comps.extend(_to_print_component(f64s, 0))
 
-        started = score(0, addr=f"#f64prt_st_{tid} {vars_obj}")
+        started = score(0, addr=f"#f64prt_st_{tid} {ctx.temp_obj}")
         for i in reversed(range(4, 16)):
             limb = b.get_limb(i)
             f64ip = nbt(addr=f"{temp_storage} __f64ip_{tid}_{i}")[str]

@@ -8,7 +8,7 @@ from .nbt import nbt
 from .score import score, getscore
 from .. import context as ctx
 from ..context import _invoke_stdlib, temp_storage
-from ..context import temp_obj, vars_obj, next_temp_id
+from ..context import temp_obj, next_temp_id
 from ..control_flow import ScoreIfMatches, ScoreIfScore
 from ..variables import bigscore
 
@@ -45,19 +45,18 @@ class float32(FlareValue):
                 self[:] = self._value_to_set
 
     def _create_var(self, varid: str):
-        return float32(addr=f"{varid} {vars_obj}")
+        return float32(addr=ctx.get_score_var_addr(varid))
 
     def _alloc_temp(self, prefix="#temp"):
         return type(self)(addr=f"{prefix}_{ctx.next_temp_id()}")
 
     def __icopy__(self, varid: str, is_recursive: bool = False):
         if self._addr is None:
-            self._parse_addr(f"{varid} {vars_obj}")
-            ctx.ensure_objective(vars_obj)
+            self._parse_addr(ctx.get_score_var_addr(varid))
             if self._value_to_set is not None:
                 self[:] = self._value_to_set
         else:
-            dest = float32(addr=f"{varid} {vars_obj}")
+            dest = float32(addr=ctx.get_score_var_addr(varid))
             dest[:] = self
             return dest
         return self
@@ -997,7 +996,7 @@ class float32(FlareValue):
         b.get_limb(0)[:] = self._mant
         b *= bigscore[8](100000000, addr=f"#f32prt_c_{tid}")
 
-        exp_adj = score(addr=f"#f32prt_e_{tid} {vars_obj}")
+        exp_adj = score(addr=f"#f32prt_e_{tid} {ctx.temp_obj}")
         exp_adj[:] = self._exp
         exp_adj -= score(23)
 
@@ -1011,7 +1010,7 @@ class float32(FlareValue):
         ScoreIfMatches(self._sign, 1).then(lambda: f32s.remove())
         comps.extend(_to_print_component(f32s, 0))
 
-        started = score(0, addr=f"#f32prt_st_{tid} {vars_obj}")
+        started = score(0, addr=f"#f32prt_st_{tid} {ctx.temp_obj}")
         for i in reversed(range(2, 8)):
             limb = b.get_limb(i)
             f32fp = nbt(addr=f"{temp_storage} __f32ip_{tid}_{i}")[str]
