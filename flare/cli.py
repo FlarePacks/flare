@@ -349,7 +349,7 @@ def _build_datapack_inner(file_path: str, cli_overrides: dict | None = None, bee
                 pass
 
     def write_if_changed(file_path_str, content):
-        content_hash = hashlib.md5(content.encode()).hexdigest()
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
         rel_path = os.path.relpath(file_path_str, build_dir_str)
 
         for t in unique_targets:
@@ -372,7 +372,7 @@ def _build_datapack_inner(file_path: str, cli_overrides: dict | None = None, bee
             c["time"] += time.perf_counter() - t0
 
     def write_if_changed_bytes(file_path_str, raw_bytes):
-        content_hash = hashlib.md5(raw_bytes).hexdigest()
+        content_hash = hashlib.sha256(raw_bytes).hexdigest()
         rel_path = os.path.relpath(file_path_str, build_dir_str)
 
         for t in unique_targets:
@@ -401,8 +401,6 @@ def _build_datapack_inner(file_path: str, cli_overrides: dict | None = None, bee
                  "description": config.get("description", "A Flare datapack")}}, indent=4))
 
     tags = {"tick": [], "load": []}
-
-    load_key = f"{context._current_namespace}:__init__"
 
     func_dir_name = "function" if config.get("pack_format", 15) >= 45 else "functions"
     ns_str = str(context._current_namespace)
