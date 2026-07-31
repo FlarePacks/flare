@@ -76,7 +76,7 @@ class BinomialNumberProvider:
                 res[k] = v
         return res
 
-class ConditionalValueNumberProvider:
+class ConditionalNumberProvider:
     def __init__(
             self,
             condition: Optional[Union['PredicateRef', Any]] = None,

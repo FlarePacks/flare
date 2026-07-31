@@ -272,7 +272,8 @@ class FlareValue(ABC, metaclass=FlareClassMeta):
             return getattr(self, fn)(t)
 
         if not isinstance(other, possibilities):
-            if type(other) in getattr(type(self), "_implements_set", tuple()):
+            implements = getattr(type(self), "_implements_set", tuple())
+            if isinstance(other, implements):
                 return getattr(self, fn)(type(self)(other))
 
             if fn == "__iset__":

@@ -1340,6 +1340,33 @@ class nbt(FlareValue, NBTStringMethods):
             _runcmd(
                 f"execute store result {addr(self)} {store_type} {scale_str} run scoreboard players get {addr(other)}")
             return self
+        if type(other).__name__ in ("float32", "float64"):
+            other._check_addr()
+            if self._type is not None and not self.is_number():
+                raise TypeError(f"Cannot set {self._type_name.lower()} with float variable")
+            is_f64 = type(other).__name__ == "float64"
+            if self.is_floaty():
+                store_type = self._store_type if self._type is not None else "double"
+                s_temp = score(addr=f"#nbt_conv_{ctx.next_temp_id()}", multiplier=1e-6)
+                if is_f64:
+                    from .float64 import float64_to_score
+                    float64_to_score(other, dest=s_temp, multiplier=1e-6)
+                else:
+                    from .float32 import float32_to_score
+                    float32_to_score(other, dest=s_temp, multiplier=1e-6)
+                _runcmd(
+                    f"execute store result {addr(self)} {store_type} 0.000001 run scoreboard players get {addr(s_temp)}")
+            else:
+                store_type = self._store_type if self._type is not None else "int"
+                s_temp = score(addr=f"#nbt_conv_{ctx.next_temp_id()}", multiplier=1.0)
+                if is_f64:
+                    from .float64 import float64_to_score
+                    float64_to_score(other, dest=s_temp, multiplier=1.0)
+                else:
+                    from .float32 import float32_to_score
+                    float32_to_score(other, dest=s_temp, multiplier=1.0)
+                _runcmd(f"execute store result {addr(self)} {store_type} 1 run scoreboard players get {addr(s_temp)}")
+            return self
         if isinstance(other, str):
             if self._type == NBTType.String:
                 _runcmd(f"data modify {addr(self)} set value {json.dumps(other)}")

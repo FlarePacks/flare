@@ -30,6 +30,12 @@ nbtbytearray = nbt[array[byte]]
 nbtintarray = nbt[array[int]]
 nbtlongarray = nbt[array[long]]
 
+score._implements_set = (int, float, score, nbt, float32, float64)
+float32._implements_set = (int, float, score, nbt, float32, float64)
+float64._implements_set = (int, float, score, nbt, float32, float64)
+nbt._implements_set = (int, float, str, list, dict, score, nbt, float32, float64)
+bigscore._implements_set = (int, float, score, bigscore)
+
 __all__ = ["bigscore", "bigfixed", "fail", "len", "range", "ord", "bin", "complex", "UnsupportedOperandError",
            "BinaryOp", "UnaryOp", "macro", "ref", "float32", "float64", "nbt", "struct", "snbt", "Objective", "score",
            "fixed", "getscore", "INT32_LIMIT", "selector", "storage", "nbtbyte", "nbtbool", "nbtshort", "nbtint",
