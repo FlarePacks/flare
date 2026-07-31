@@ -70,8 +70,11 @@ def _is_runtime(val) -> bool:
 
 
 def _is_snbt_literal(item: Any) -> bool:
+    from .snbt import _snbt_array
     if isinstance(item, (int, float, str, bool, _snbt)):
         return True
+    if isinstance(item, _snbt_array):
+        return all(_is_snbt_literal(x) for x in item.items)
     if isinstance(item, (list, tuple)):
         return all(_is_snbt_literal(x) for x in item)
     if isinstance(item, dict):
@@ -82,7 +85,8 @@ def _is_snbt_literal(item: Any) -> bool:
 
 
 def _to_snbt_obj(item: Any) -> Any:
-    if isinstance(item, (int, float, str, bool, _snbt)):
+    from .snbt import _snbt_array
+    if isinstance(item, (int, float, str, bool, _snbt, _snbt_array)):
         return item
     if isinstance(item, (list, tuple)):
         return [_to_snbt_obj(x) for x in item]
@@ -214,7 +218,10 @@ def _nbt_default_snbt(nbt_type) -> str:
 
 def _snbt_literal(val: Any) -> str:
     from .core import macro
+    from .snbt import _snbt_array
     if isinstance(val, _snbt):
+        return str(val)
+    if isinstance(val, _snbt_array):
         return str(val)
     if isinstance(val, nbt) and val._value_to_set is not None:
         return _snbt_literal(val._value_to_set)
@@ -1265,7 +1272,7 @@ class nbt(FlareValue, NBTStringMethods):
 
     @property
     def _store_type(self):
-        if self._type is None:
+        if self._type is None or getattr(self, "_type_name", "").lower() == "unknown":
             raise TypeError("Cannot determine store type for untyped NBT. Specify a type (e.g. nbt[int]).")
         return self._type_name.lower()
 
@@ -1323,7 +1330,7 @@ class nbt(FlareValue, NBTStringMethods):
                 type_name = self._type_name.lower()
                 raise TypeError(f"Cannot set {type_name} with score")
             if self._type is not None:
-                store_type = self._type_name.lower()
+                store_type = self._store_type
             else:
                 store_type = "double" if other._multiplier != 1.0 else "int"
 
@@ -1398,6 +1405,42 @@ class nbt(FlareValue, NBTStringMethods):
             for i, x in enumerate(other):
                 if _is_runtime(x):
                     self[i].__iset__(x)
+            return self
+
+        from .snbt import _snbt_array
+        if isinstance(other, _snbt_array):
+            prefix = other.prefix + ";"
+            suf = other._suffix()
+            has_runtime = any(_is_runtime(x) for x in other.items)
+
+            def _fmt_item(x):
+                if _is_runtime(x):
+                    return f"0{suf}"
+                if isinstance(x, (int, float)) and not isinstance(x, bool) and suf:
+                    return f"{x}{suf}"
+                return _snbt_literal(x)
+
+            if not has_runtime:
+                lit_parts = [_fmt_item(x) for x in other.items]
+                _runcmd_snbt(f"data modify {addr(self)} set value [{prefix}{','.join(lit_parts)}]", src_val=other)
+                return self
+
+            skeleton_parts = [_fmt_item(x) for x in other.items]
+            _runcmd_snbt(f"data modify {addr(self)} set value [{prefix}{','.join(skeleton_parts)}]", src_val=other)
+
+            for i, x in enumerate(other.items):
+                if _is_runtime(x):
+                    elem_nbt = self[i]
+                    if other.prefix == "B":
+                        elem_nbt._type = NBTType.Byte
+                        elem_nbt._type_name = "Byte"
+                    elif other.prefix == "I":
+                        elem_nbt._type = NBTType.Int
+                        elem_nbt._type_name = "Int"
+                    elif other.prefix == "L":
+                        elem_nbt._type = NBTType.Long
+                        elem_nbt._type_name = "Long"
+                    elem_nbt.__iset__(x)
             return self
 
         if isinstance(other, dict):

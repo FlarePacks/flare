@@ -1073,6 +1073,40 @@ def preprocess_minecraft_commands(source: str) -> str:
                     i += k
                     continue
 
+        if tok.type == tokenize.OP and tok.string == "[":
+            if i + 2 < len(tokens):
+                t1 = tokens[i + 1]
+                t2 = tokens[i + 2]
+                if t1.type == tokenize.NAME and t1.string.upper() in "BIL" and t2.type == tokenize.OP and t2.string == ";":
+                    arr_prefix = t1.string.upper()
+                    bracket_depth = 1
+                    inside_tokens = []
+                    scan_idx = i + 3
+                    while scan_idx < len(tokens) and bracket_depth > 0:
+                        st = tokens[scan_idx]
+                        if st.type == tokenize.OP:
+                            if st.string in ("[", "{", "("):
+                                bracket_depth += 1
+                            elif st.string in ("]", "}", ")"):
+                                bracket_depth -= 1
+                                if bracket_depth == 0:
+                                    break
+                        inside_tokens.append(st)
+                        scan_idx += 1
+
+                    if bracket_depth == 0:
+                        out_tokens.append((tokenize.NAME, "_snbt_array"))
+                        out_tokens.append((tokenize.OP, "("))
+                        out_tokens.append((tokenize.STRING, f'"{arr_prefix}"'))
+                        out_tokens.append((tokenize.OP, ","))
+                        out_tokens.append((tokenize.OP, "["))
+                        for st in inside_tokens:
+                            out_tokens.append((st.type, st.string))
+                        out_tokens.append((tokenize.OP, "]"))
+                        out_tokens.append((tokenize.OP, ")"))
+                        i = scan_idx + 1
+                        continue
+
         if tok.type == tokenize.OP and tok.string in ("[", "{", "(", ","):
             seq = []
             temp_i = i + 1
