@@ -1069,8 +1069,9 @@ class nbt(FlareValue, NBTStringMethods):
 
         if self.is_number():
             raise TypeError("Cannot chain path on NBT numbers")
-        if isinstance(item, int) or getattr(item, "_is_macro_param", False):
-            new_path = f"{self._path}[{item}]"
+        if isinstance(item, (int, score)) or getattr(item, "_is_macro_param", False):
+            idx_str = f"$({item._varid})" if isinstance(item, score) and hasattr(item, "_varid") else str(item)
+            new_path = f"{self._path}[{idx_str}]"
             datatype = None
             new_schema_node = None
             if self._schema_node and "children" in self._schema_node:

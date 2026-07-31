@@ -640,25 +640,9 @@ PYTHON_KEYWORDS = {"False", "None", "True", "and", "as", "assert", "async", "awa
                    "while", "with", "yield"}
 
 
-def emit_target_nbt_addr(target_type, target_str, path_tokens, out_tokens, type_args_tokens=None):
-    path_str = ""
-    for pt in path_tokens:
-        if pt.type == tokenize.OP and pt.string == ".":
-            path_str += "."
-        elif pt.type == tokenize.STRING:
-            try:
-                val = ast.literal_eval(pt.string)
-            except Exception:
-                val = pt.string.strip('"').strip("'")
-            path_str += str(val)
-        else:
-            path_str += pt.string
-
+def emit_target_nbt_addr(target_type, target_str, path_tokens, out_tokens):
     target_clean = target_str.strip('"').strip("'")
-    if path_str:
-        addr_str = f"{target_type} {target_clean} {path_str}"
-    else:
-        addr_str = f"{target_type} {target_clean}"
+    addr_str = f"{target_type} {target_clean}"
 
     escaped = addr_str.replace('"', '\\"')
     out_tokens.append((tokenize.NAME, "nbt"))
@@ -668,11 +652,28 @@ def emit_target_nbt_addr(target_type, target_str, path_tokens, out_tokens, type_
     out_tokens.append((tokenize.STRING, f'"{escaped}"'))
     out_tokens.append((tokenize.OP, ")"))
 
-    if type_args_tokens:
-        out_tokens.append((tokenize.OP, "["))
-        for tt in type_args_tokens:
-            out_tokens.append((tt.type, tt.string))
-        out_tokens.append((tokenize.OP, "]"))
+    if path_tokens:
+        out_tokens.append((tokenize.OP, "."))
+        prev_is_dot = True
+        for pt in path_tokens:
+            if pt.type == tokenize.NUMBER and pt.string.startswith("."):
+                num_str = pt.string.lstrip(".")
+                if out_tokens and out_tokens[-1] == (tokenize.OP, "."):
+                    out_tokens.pop()
+                out_tokens.append((tokenize.OP, "["))
+                out_tokens.append((tokenize.NUMBER, num_str))
+                out_tokens.append((tokenize.OP, "]"))
+                prev_is_dot = False
+            elif pt.type == tokenize.STRING and prev_is_dot:
+                if out_tokens and out_tokens[-1] == (tokenize.OP, "."):
+                    out_tokens.pop()
+                out_tokens.append((tokenize.OP, "["))
+                out_tokens.append((tokenize.STRING, pt.string))
+                out_tokens.append((tokenize.OP, "]"))
+                prev_is_dot = False
+            else:
+                out_tokens.append((pt.type, pt.string))
+                prev_is_dot = (pt.type == tokenize.OP and pt.string == ".")
 
 
 def preprocess_minecraft_commands(source: str) -> str:
@@ -1046,7 +1047,8 @@ def preprocess_minecraft_commands(source: str) -> str:
                     else:
                         break
 
-                if len(coords) >= 2:
+                has_tilde_or_caret = any(t.string in ("~", "^") for t in collected_tokens)
+                if len(coords) >= 2 and (has_tilde_or_caret or first_tok.string == "b"):
                     out_tokens.append((tokenize.NAME, "block"))
                     out_tokens.append((tokenize.OP, "("))
                     out_tokens.append((tokenize.NAME, "ref"))
@@ -1145,7 +1147,8 @@ def preprocess_minecraft_commands(source: str) -> str:
                     else:
                         break
 
-                if len(coords) >= 2:
+                has_tilde_or_caret_seq = any(t.string in ("~", "^") for t in seq)
+                if len(coords) >= 2 and has_tilde_or_caret_seq:
                     out_tokens.append(tok)
                     out_tokens.append((tokenize.NAME, "block"))
                     out_tokens.append((tokenize.OP, "("))
@@ -1360,31 +1363,9 @@ def preprocess_minecraft_commands(source: str) -> str:
 
         if tok.type == tokenize.NAME and tok.string == "storage":
             next_idx = i + 1
-            type_args_tokens = None
-            if next_idx < len(tokens) and tokens[next_idx].start == tok.end and tokens[next_idx].type == tokenize.OP and \
-                    tokens[next_idx].string == "[":
-                bracket_i = next_idx + 1
-                temp_bracket = 1
-                matching_bracket_i = -1
-                while bracket_i < len(tokens) and temp_bracket > 0:
-                    t = tokens[bracket_i]
-                    if t.type == tokenize.OP:
-                        if t.string in ("[", "{", "("):
-                            temp_bracket += 1
-                        elif t.string in ("]", "}", ")"):
-                            temp_bracket -= 1
-                            if temp_bracket == 0 and t.string == "]":
-                                matching_bracket_i = bracket_i
-                    bracket_i += 1
-                if matching_bracket_i != -1:
-                    type_args_tokens = tokens[next_idx + 1:matching_bracket_i]
-                    next_idx = matching_bracket_i + 1
-
             if next_idx < len(tokens):
                 first_tok = tokens[next_idx]
-                last_end = tokens[next_idx - 1].end if next_idx > i + 1 else tok.end
-
-                if first_tok.line == tok.line and first_tok.start > last_end:
+                if first_tok.line == tok.line and first_tok.start > tok.end:
                     if first_tok.type in (tokenize.NAME, tokenize.NUMBER, tokenize.STRING) or (
                             first_tok.type == tokenize.OP and first_tok.string in ("!", "-", "+", "_")):
                         target_tokens = [first_tok]
@@ -1437,36 +1418,15 @@ def preprocess_minecraft_commands(source: str) -> str:
                                         path_curr += 1
                                     scan = path_curr
 
-                        emit_target_nbt_addr("storage", target_str, path_tokens, out_tokens, type_args_tokens)
+                        emit_target_nbt_addr("storage", target_str, path_tokens, out_tokens)
                         i = scan
                         continue
 
         if tok.type == tokenize.NAME and tok.string == "entity":
             next_idx = i + 1
-            type_args_tokens = None
-            if next_idx < len(tokens) and tokens[next_idx].start == tok.end and tokens[next_idx].type == tokenize.OP and \
-                    tokens[next_idx].string == "[":
-                bracket_i = next_idx + 1
-                temp_bracket = 1
-                matching_bracket_i = -1
-                while bracket_i < len(tokens) and temp_bracket > 0:
-                    t = tokens[bracket_i]
-                    if t.type == tokenize.OP:
-                        if t.string in ("[", "{", "("):
-                            temp_bracket += 1
-                        elif t.string in ("]", "}", ")"):
-                            temp_bracket -= 1
-                            if temp_bracket == 0 and t.string == "]":
-                                matching_bracket_i = bracket_i
-                    bracket_i += 1
-                if matching_bracket_i != -1:
-                    type_args_tokens = tokens[next_idx + 1:matching_bracket_i]
-                    next_idx = matching_bracket_i + 1
-
             if next_idx < len(tokens):
                 first_tok = tokens[next_idx]
-                last_end = tokens[next_idx - 1].end if next_idx > i + 1 else tok.end
-                if first_tok.line == tok.line and first_tok.start > last_end:
+                if first_tok.line == tok.line and first_tok.start > tok.end:
                     if first_tok.type == tokenize.OP and first_tok.string == "@":
                         if next_idx + 1 < len(tokens) and tokens[next_idx + 1].type == tokenize.NAME:
                             sel_name = tokens[next_idx + 1].string
@@ -1528,36 +1488,15 @@ def preprocess_minecraft_commands(source: str) -> str:
                                             path_curr += 1
                                         scan = path_curr
 
-                            emit_target_nbt_addr("entity", full_selector_str, path_tokens, out_tokens, type_args_tokens)
+                            emit_target_nbt_addr("entity", full_selector_str, path_tokens, out_tokens)
                             i = scan
                             continue
 
         if tok.type == tokenize.NAME and tok.string == "block":
             next_idx = i + 1
-            type_args_tokens = None
-            if next_idx < len(tokens) and tokens[next_idx].start == tok.end and tokens[next_idx].type == tokenize.OP and \
-                    tokens[next_idx].string == "[":
-                bracket_i = next_idx + 1
-                temp_bracket = 1
-                matching_bracket_i = -1
-                while bracket_i < len(tokens) and temp_bracket > 0:
-                    t = tokens[bracket_i]
-                    if t.type == tokenize.OP:
-                        if t.string in ("[", "{", "("):
-                            temp_bracket += 1
-                        elif t.string in ("]", "}", ")"):
-                            temp_bracket -= 1
-                            if temp_bracket == 0 and t.string == "]":
-                                matching_bracket_i = bracket_i
-                    bracket_i += 1
-                if matching_bracket_i != -1:
-                    type_args_tokens = tokens[next_idx + 1:matching_bracket_i]
-                    next_idx = matching_bracket_i + 1
-
             if next_idx < len(tokens):
                 first_tok = tokens[next_idx]
-                last_end = tokens[next_idx - 1].end if next_idx > i + 1 else tok.end
-                if first_tok.line == tok.line and first_tok.start > last_end:
+                if first_tok.line == tok.line and first_tok.start > tok.end:
                     curr_c = next_idx
 
                     if first_tok.type == tokenize.NAME and first_tok.string == "b" and next_idx + 1 < len(tokens) and \
@@ -1623,14 +1562,15 @@ def preprocess_minecraft_commands(source: str) -> str:
                                         path_curr += 1
                                     scan = path_curr
 
-                        emit_target_nbt_addr("block", coord_str, path_tokens, out_tokens, type_args_tokens)
+                        emit_target_nbt_addr("block", coord_str, path_tokens, out_tokens)
                         i = scan
                         continue
 
         out_tokens.append((tok.type, tok.string))
         i += 1
 
-    return tokenize.untokenize(out_tokens)
+    clean_tokens = [(t[0], t[1]) for t in out_tokens]
+    return tokenize.untokenize(clean_tokens)
 
 
 HEADER_IMPORTS = ("from flare import *\n"
