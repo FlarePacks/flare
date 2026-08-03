@@ -1379,7 +1379,14 @@ def preprocess_minecraft_commands(source: str) -> str:
 
             is_empty = (matching_bracket_i == i + 1)
 
-            if (has_selector_arg or is_empty) and matching_bracket_i != -1:
+            if is_empty and matching_bracket_i != -1:
+                out_tokens.append((tokenize.OP, "["))
+                out_tokens.append((tokenize.OP, ":"))
+                out_tokens.append((tokenize.OP, "]"))
+                i = matching_bracket_i + 1
+                continue
+
+            if has_selector_arg and matching_bracket_i != -1:
                 inner_str = ""
                 for j in range(i + 1, matching_bracket_i):
                     inner_str += tokens[j].string
@@ -1387,7 +1394,8 @@ def preprocess_minecraft_commands(source: str) -> str:
                 out_tokens.append((tokenize.OP, "."))
                 out_tokens.append((tokenize.NAME, "__selector_index__"))
                 out_tokens.append((tokenize.OP, "("))
-                out_tokens.append((tokenize.STRING, f'"{escaped}"'))
+                escaped_inner = inner_str.replace('"', '\\"')
+                out_tokens.append((tokenize.STRING, f'"{escaped_inner}"'))
                 out_tokens.append((tokenize.OP, ")"))
 
                 i = matching_bracket_i + 1

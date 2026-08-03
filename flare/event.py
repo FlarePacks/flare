@@ -154,7 +154,7 @@ def right_click_event(conditions=None, *, once=False, name=None, append=False, r
         @using_item_event(conditions, name=actual_name, append=append, returns=returns, auto_revoke=auto_revoke)
         def _use():
             _flare_if(lambda: cd_score != 1, lambda: func())
-            cd_score[:] = 2
+            cd_score[...] = 2
 
         return _use
 

@@ -56,7 +56,7 @@ class score(FlareValue):
                     self._addr = f"{self._name} {self._objective}"
                     ctx.ensure_objective(self._objective)
                 if self._value_to_set is not None:
-                    self[:] = self._value_to_set
+                    self[...] = self._value_to_set
             else:
                 self._name = ""
                 self._objective = ""
@@ -79,10 +79,10 @@ class score(FlareValue):
             self._name, self._objective = parts[0], parts[1]
             ctx.ensure_objective(self._objective)
             if self._value_to_set is not None:
-                self[:] = self._value_to_set
+                self[...] = self._value_to_set
         else:
             dest = type(self)(addr=ctx.get_score_var_addr(varid), multiplier=self._multiplier)
-            dest[:] = self
+            dest[...] = self
             return dest
         return self
 
@@ -115,7 +115,7 @@ class score(FlareValue):
             self._addr = f"{self._name} {self._objective}"
             ctx.ensure_objective(self._objective)
             if self._value_to_set is not None:
-                self[:] = self._value_to_set
+                self[...] = self._value_to_set
 
     def _check_writable(self):
         self._check_addr()
@@ -222,7 +222,7 @@ class score(FlareValue):
         term = x * (math.pi - x)
 
         result = dest if dest is not None else self._alloc_temp()
-        result[:] = term / ((5.0 / 16.0) * math.pi * math.pi - 0.25 * term)
+        result[...] = term / ((5.0 / 16.0) * math.pi * math.pi - 0.25 * term)
         ScoreIfMatches(is_neg, 1).then(lambda: result.__imul__(-1))
         return result
 
@@ -230,7 +230,7 @@ class score(FlareValue):
         from ..control_flow import ScoreIfMatches, ScoreIfScore
 
         result = dest if dest is not None else self._alloc_temp()
-        result[:] = self
+        result[...] = self
         result %= 2 * math.pi
 
         ScoreIfMatches(result, (-math.inf, -1)).then(lambda: result.__iadd__(2 * math.pi))
@@ -249,7 +249,7 @@ class score(FlareValue):
         iterations = {1: 4, 2: 6, 3: 6, 4: 8, 5: 4, 6: 1}.get(digit_precision, 0)
 
         if iterations <= 1:
-            result[:] = result
+            result[...] = result
             return result
 
         x2 = (result * result).__icopy__("#sin_x2")
@@ -269,9 +269,9 @@ class score(FlareValue):
 
     def __cos__(self, dest=None):
         half_pi = score(0, addr="#cos_hpi", multiplier=self._multiplier)
-        half_pi[:] = math.pi / 2
+        half_pi[...] = math.pi / 2
         temp = self._alloc_temp()
-        temp[:] = self + half_pi
+        temp[...] = self + half_pi
         return temp.__sin__(dest)
 
     def __abs__(self):
@@ -306,15 +306,15 @@ class score(FlareValue):
         pi_2 = getscore(math.pi / 2.0, multiplier=self._multiplier)
         pi = getscore(math.pi, multiplier=self._multiplier)
 
-        res[:] = r
+        res[...] = r
 
         temp1 = score(multiplier=self._multiplier)
-        temp1[:] = pi_2 - res
+        temp1[...] = pi_2 - res
         _runcmd(
             f"execute if score {addr(y_abs)} > {addr(x_abs)} run scoreboard players operation {addr(res)} = {addr(temp1)}")
 
         temp2 = score(multiplier=self._multiplier)
-        temp2[:] = pi - res
+        temp2[...] = pi - res
         _runcmd(f"execute if score {addr(x)} matches ..-1 run scoreboard players operation {addr(res)} = {addr(temp2)}")
 
         m1 = getscore(-1, multiplier=1.0)
@@ -354,7 +354,7 @@ class score(FlareValue):
             res = (res * res).__icopy__("#exp_res")
 
         if dest is not None:
-            dest[:] = res
+            dest[...] = res
             return dest
         return res
 
@@ -602,13 +602,13 @@ class score(FlareValue):
                 _runcmd(f"scoreboard players operation {addr(self)} >< {addr(other)}")
             else:
                 _runcmd(f"scoreboard players operation {addr(temp)} = {addr(self)}")
-                self[:] = other
-                other[:] = score(addr=temp._addr, multiplier=self._multiplier)
+                self[...] = other
+                other[...] = score(addr=temp._addr, multiplier=self._multiplier)
             return self
         return self._try_binary("__swap__", "swap", other, (score, nbt))
 
     def __call__(self, *args, **kwargs):
-        self[:] = args[0]
+        self[...] = args[0]
         return self
 
     def __repr__(self):

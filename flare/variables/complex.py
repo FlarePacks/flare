@@ -39,17 +39,17 @@ class complex(FlareValue):
         if is_lazy(self.real):
             self.real._compile_into(dest.real)
         else:
-            dest.real[:] = self.real
+            dest.real[...] = self.real
 
         if is_lazy(self.imag):
             self.imag._compile_into(dest.imag)
         else:
-            dest.imag[:] = self.imag
+            dest.imag[...] = self.imag
 
     def __iset__(self, other):
         if isinstance(other, complex):
-            self.real[:] = other.real
-            self.imag[:] = other.imag
+            self.real[...] = other.real
+            self.imag[...] = other.imag
             return self
         return self._try_binary("__iset__", "=", other)
 
@@ -77,8 +77,8 @@ class complex(FlareValue):
             temp_real = a * c - b * d
             temp_imag = a * d + b * c
 
-            self.real[:] = temp_real
-            self.imag[:] = temp_imag
+            self.real[...] = temp_real
+            self.imag[...] = temp_imag
             return self
 
         self.real *= other
@@ -94,8 +94,8 @@ class complex(FlareValue):
             temp_real = (a * c + b * d) / denom
             temp_imag = (b * c - a * d) / denom
 
-            self.real[:] = temp_real
-            self.imag[:] = temp_imag
+            self.real[...] = temp_real
+            self.imag[...] = temp_imag
             return self
 
         self.real /= other

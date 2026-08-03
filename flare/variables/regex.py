@@ -71,8 +71,8 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
         if op == sre_constants.LITERAL:
             char_val = val
 
-            current_char[:] = -999
-            char_valid[:] = 0
+            current_char[...] = -999
+            char_valid[...] = 0
 
             macro_args.idx = regex_index
             _invoke_read_char()
@@ -84,19 +84,19 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
             if next_func:
                 _runcmd(f"function {next_func}")
             else:
-                regex_matched[:] = 1
+                regex_matched[...] = 1
 
             ScoreIfMatches(regex_matched, 0).then(lambda: regex_index.__isub__(1))
 
         elif op == sre_constants.IN:
-            current_char[:] = -999
-            char_valid[:] = 0
+            current_char[...] = -999
+            char_valid[...] = 0
             macro_args.idx = regex_index
             _invoke_read_char()
 
             ScoreIfMatches(char_valid, 0).then(lambda: _runcmd("return 0"))
 
-            in_match[:] = 0
+            in_match[...] = 0
 
             negate = False
             if len(val) > 0 and val[0][0] == sre_constants.NEGATE:
@@ -142,15 +142,15 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
             if next_func:
                 _runcmd(f"function {next_func}")
             else:
-                regex_matched[:] = 1
+                regex_matched[...] = 1
 
             ScoreIfMatches(regex_matched, 0).then(lambda: regex_index.__isub__(1))
 
         elif op == sre_constants.NOT_LITERAL:
             char_val = val
 
-            current_char[:] = -999
-            char_valid[:] = 0
+            current_char[...] = -999
+            char_valid[...] = 0
             macro_args.idx = regex_index
             _invoke_read_char()
 
@@ -161,19 +161,19 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
             if next_func:
                 _runcmd(f"function {next_func}")
             else:
-                regex_matched[:] = 1
+                regex_matched[...] = 1
 
             ScoreIfMatches(regex_matched, 0).then(lambda: regex_index.__isub__(1))
 
         elif op == sre_constants.CATEGORY:
-            current_char[:] = -999
-            char_valid[:] = 0
+            current_char[...] = -999
+            char_valid[...] = 0
             macro_args.idx = regex_index
             _invoke_read_char()
 
             ScoreIfMatches(char_valid, 0).then(lambda: _runcmd("return 0"))
 
-            category_match[:] = 0
+            category_match[...] = 0
             if val == sre_constants.CATEGORY_DIGIT:
                 ScoreIfMatches(current_char, (48, 57)).then(lambda: category_match.__iset__(1))
             elif val == sre_constants.CATEGORY_NOT_DIGIT:
@@ -205,7 +205,7 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
             if next_func:
                 _runcmd(f"function {next_func}")
             else:
-                regex_matched[:] = 1
+                regex_matched[...] = 1
 
             ScoreIfMatches(regex_matched, 0).then(lambda: regex_index.__isub__(1))
 
@@ -228,7 +228,7 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
             with ctx.push_context(loop_func):
                 ScoreIfMatches(regex_matched, 1).then(lambda: _runcmd("return 1"))
 
-                temp_prev_idx[:] = regex_stack[-2]
+                temp_prev_idx[...] = regex_stack[-2]
                 _flare_if(lambda: regex_index == temp_prev_idx,
                           lambda: _runcmd(f"function {next_func if next_func else 'flare:regex_dummy_match'}"))
                 _flare_if(lambda: (regex_index == temp_prev_idx) & (regex_matched == 1), lambda: _runcmd("return 1"))
@@ -250,15 +250,15 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
                 _runcmd(f"function {sub_start}")
                 ScoreIfMatches(regex_matched, 1).then(lambda: _runcmd("return 1"))
 
-                score(addr=f"{counter_name}")[:] = regex_stack[-1]
+                score(addr=f"{counter_name}")[...] = regex_stack[-1]
                 regex_stack[-1].remove()
-                regex_index[:] = regex_stack[-1]
+                regex_index[...] = regex_stack[-1]
                 regex_stack[-1].remove()
 
                 ScoreIfMatches(score(addr=f"{counter_name}"), (min_repeats, inf)).then(
                     lambda: _runcmd(f"function {next_func if next_func else 'flare:regex_dummy_match'}"))
 
-            score(addr=f"{counter_name}")[:] = 0
+            score(addr=f"{counter_name}")[...] = 0
 
             regex_stack.append(0)
             regex_stack[-1] = regex_index
@@ -269,9 +269,9 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
             _runcmd(f"function {sub_start}")
             ScoreIfMatches(regex_matched, 1).then(lambda: _runcmd("return 1"))
 
-            score(addr=f"{counter_name}")[:] = regex_stack[-1]
+            score(addr=f"{counter_name}")[...] = regex_stack[-1]
             regex_stack[-1].remove()
-            regex_index[:] = regex_stack[-1]
+            regex_index[...] = regex_stack[-1]
             regex_stack[-1].remove()
 
             ScoreIfMatches(score(addr=f"{counter_name}"), (min_repeats, inf)).then(
@@ -289,7 +289,7 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
             with ctx.push_context(loop_func):
                 ScoreIfMatches(regex_matched, 1).then(lambda: _runcmd("return 1"))
 
-                temp_prev_idx[:] = regex_stack[-2]
+                temp_prev_idx[...] = regex_stack[-2]
                 _flare_if(lambda: regex_index == temp_prev_idx,
                           lambda: _runcmd(f"function {next_func if next_func else 'flare:regex_dummy_match'}"))
                 _flare_if(lambda: (regex_index == temp_prev_idx) & (regex_matched == 1), lambda: _runcmd("return 1"))
@@ -312,12 +312,12 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
                 _runcmd(f"function {sub_start}")
                 ScoreIfMatches(regex_matched, 1).then(lambda: _runcmd("return 1"))
 
-                score(addr=f"{counter_name}")[:] = regex_stack[-1]
+                score(addr=f"{counter_name}")[...] = regex_stack[-1]
                 regex_stack[-1].remove()
-                regex_index[:] = regex_stack[-1]
+                regex_index[...] = regex_stack[-1]
                 regex_stack[-1].remove()
 
-            score(addr=f"{counter_name}")[:] = 0
+            score(addr=f"{counter_name}")[...] = 0
 
             ScoreIfMatches(score(addr=f"{counter_name}"), (min_repeats, inf)).then(
                 lambda: _runcmd(f"function {next_func if next_func else 'flare:regex_dummy_match'}"))
@@ -332,14 +332,14 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
                 _runcmd(f"function {sub_start}")
                 ScoreIfMatches(regex_matched, 1).then(lambda: _runcmd("return 1"))
 
-                score(addr=f"{counter_name}")[:] = regex_stack[-1]
+                score(addr=f"{counter_name}")[...] = regex_stack[-1]
                 regex_stack[-1].remove()
-                regex_index[:] = regex_stack[-1]
+                regex_index[...] = regex_stack[-1]
                 regex_stack[-1].remove()
 
         elif op == sre_constants.ANY:
-            current_char[:] = -999
-            char_valid[:] = 0
+            current_char[...] = -999
+            char_valid[...] = 0
             macro_args.idx = regex_index
             _invoke_read_char()
 
@@ -350,7 +350,7 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
             if next_func:
                 _runcmd(f"function {next_func}")
             else:
-                regex_matched[:] = 1
+                regex_matched[...] = 1
 
             ScoreIfMatches(regex_matched, 0).then(lambda: regex_index.__isub__(1))
 
@@ -361,25 +361,25 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
                 if next_func:
                     _runcmd(f"function {next_func}")
                 else:
-                    regex_matched[:] = 1
+                    regex_matched[...] = 1
             elif val in (sre_constants.AT_END, sre_constants.AT_END_STRING):
-                char_valid[:] = 0
+                char_valid[...] = 0
                 macro_args.idx = regex_index
                 _invoke_read_char()
                 ScoreIfMatches(char_valid, 0).invert().then(lambda: _runcmd("return 0"))
                 if next_func:
                     _runcmd(f"function {next_func}")
                 else:
-                    regex_matched[:] = 1
+                    regex_matched[...] = 1
             elif val in (sre_constants.AT_BOUNDARY, sre_constants.AT_NON_BOUNDARY):
                 is_boundary = 1 if val == sre_constants.AT_BOUNDARY else 0
 
-                char_valid[:] = 0
-                prev_idx[:] = regex_index
+                char_valid[...] = 0
+                prev_idx[...] = regex_index
                 prev_idx.__isub__(1)
                 macro_args.idx = prev_idx
                 _invoke_read_char()
-                prev_is_word[:] = 0
+                prev_is_word[...] = 0
                 (ScoreIfMatches(char_valid, 0).invert() & ScoreIfMatches(current_char, (97, 122))).then(
                     lambda: prev_is_word.__iset__(1))
                 (ScoreIfMatches(char_valid, 0).invert() & ScoreIfMatches(current_char, (65, 90))).then(
@@ -389,10 +389,10 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
                 (ScoreIfMatches(char_valid, 0).invert() & ScoreIfMatches(current_char, 95)).then(
                     lambda: prev_is_word.__iset__(1))
 
-                char_valid[:] = 0
+                char_valid[...] = 0
                 macro_args.idx = regex_index
                 _invoke_read_char()
-                curr_is_word[:] = 0
+                curr_is_word[...] = 0
                 (ScoreIfMatches(char_valid, 0).invert() & ScoreIfMatches(current_char, (97, 122))).then(
                     lambda: curr_is_word.__iset__(1))
                 (ScoreIfMatches(char_valid, 0).invert() & ScoreIfMatches(current_char, (65, 90))).then(
@@ -410,12 +410,12 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
                 if next_func:
                     _runcmd(f"function {next_func}")
                 else:
-                    regex_matched[:] = 1
+                    regex_matched[...] = 1
             elif val in (sre_constants.AT_BEGINNING_LINE, sre_constants.AT_END_LINE):
                 if val == sre_constants.AT_BEGINNING_LINE:
-                    is_bol[:] = 0
+                    is_bol[...] = 0
                     ScoreIfMatches(regex_index, 0).then(lambda: is_bol.__iset__(1))
-                    prev_idx[:] = regex_index
+                    prev_idx[...] = regex_index
                     prev_idx.__isub__(1)
                     macro_args.idx = prev_idx
                     _invoke_read_char()
@@ -423,9 +423,9 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
                         lambda: is_bol.__iset__(1))
                     ScoreIfMatches(is_bol, 0).then(lambda: _runcmd("return 0"))
                 else:
-                    is_eol[:] = 0
+                    is_eol[...] = 0
                     macro_args.idx = regex_index
-                    char_valid[:] = 0
+                    char_valid[...] = 0
                     _invoke_read_char()
                     (ScoreIfMatches(char_valid, 0).invert() & ScoreIfMatches(current_char, 10)).then(
                         lambda: is_eol.__iset__(1))
@@ -434,7 +434,7 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
                 if next_func:
                     _runcmd(f"function {next_func}")
                 else:
-                    regex_matched[:] = 1
+                    regex_matched[...] = 1
             else:
                 raise NotImplementedError(f"Regex AT anchor {val} not yet supported in Flare.")
 
@@ -453,10 +453,10 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
             node_id = ctx.next_func_id()
             loop_func = ctx.get_generated_func_name(f"{base_name}_groupref_loop")
 
-            ref_start[:] = _get_group_start(group_num)
-            ref_end[:] = _get_group_end(group_num)
+            ref_start[...] = _get_group_start(group_num)
+            ref_end[...] = _get_group_end(group_num)
 
-            ref_match[:] = 1
+            ref_match[...] = 1
 
             with ctx.push_context(loop_func):
                 ScoreIfMatches(regex_matched, 1).then(lambda: _runcmd("return 1"))
@@ -465,13 +465,13 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
                           lambda: _runcmd(f"function {next_func if next_func else 'flare:regex_dummy_match'}"))
                 _flare_if(lambda: ref_start >= ref_end, lambda: _runcmd(f"return 0"))
 
-                char_valid[:] = 0
+                char_valid[...] = 0
                 macro_args.idx = regex_index
                 _invoke_read_char()
                 ScoreIfMatches(char_valid, 0).then(lambda: _runcmd("return 0"))
-                target_char[:] = current_char
+                target_char[...] = current_char
 
-                char_valid[:] = 0
+                char_valid[...] = 0
                 macro_args.idx = ref_start
                 _invoke_read_char()
 
@@ -495,14 +495,14 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
             with ctx.push_context(wrapper_func):
                 ScoreIfMatches(regex_matched, 1).then(lambda: _runcmd("return 1"))
 
-                score(addr=f"orig_idx_{node_id}")[:] = regex_stack[-1]
-                score(addr=f"adv_idx_{node_id}")[:] = regex_index
-                regex_index[:] = score(addr=f"orig_idx_{node_id}")
+                score(addr=f"orig_idx_{node_id}")[...] = regex_stack[-1]
+                score(addr=f"adv_idx_{node_id}")[...] = regex_index
+                regex_index[...] = score(addr=f"orig_idx_{node_id}")
 
                 if next_func:
                     _runcmd(f"function {next_func}")
                 else:
-                    regex_matched[:] = 1
+                    regex_matched[...] = 1
 
                 ScoreIfMatches(regex_matched, 0).then(lambda: regex_index.__iset__(score(addr=f"adv_idx_{node_id}")))
 
@@ -519,7 +519,7 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
             node_id = ctx.next_func_id()
             terminal_func = ctx.get_generated_func_name(f"{base_name}_assertnot_term")
             with ctx.push_context(terminal_func):
-                regex_matched[:] = 1
+                regex_matched[...] = 1
 
             sub_start = _compile_sequence(subnodes, terminal_func, f"{base_name}_sub_{node_id}", needs_capture)
 
@@ -528,12 +528,12 @@ def _compile_node(node: tuple, next_func: str | None, base_name: str, needs_capt
 
             _runcmd(f"function {sub_start}")
 
-            assert_not_failed[:] = 0
+            assert_not_failed[...] = 0
             ScoreIfMatches(regex_matched, 1).then(lambda: assert_not_failed.__iset__(1))
 
-            regex_matched[:] = 0
+            regex_matched[...] = 0
 
-            regex_index[:] = regex_stack[-1]
+            regex_index[...] = regex_stack[-1]
             regex_stack[-1].remove()
 
             ScoreIfMatches(assert_not_failed, 0).then(
@@ -553,11 +553,11 @@ def _compile_sequence(nodes, final_continuation: str, base_name: str, needs_capt
             node_id = ctx.next_func_id()
             sub_end_func = ctx.get_generated_func_name(f"{base_name}_subend")
             with ctx.push_context(sub_end_func):
-                _get_group_end(group_num)[:] = regex_index
+                _get_group_end(group_num)[...] = regex_index
                 if current_cont:
                     _runcmd(f"function {current_cont}")
                 else:
-                    regex_matched[:] = 1
+                    regex_matched[...] = 1
 
             inner_start = _compile_sequence(subnodes, sub_end_func, f"{base_name}_subpat_{group_num}", needs_capture)
 
@@ -570,16 +570,16 @@ def _compile_sequence(nodes, final_continuation: str, base_name: str, needs_capt
                 regex_stack.append(-1)
                 regex_stack[-1] = _get_group_end(group_num)
 
-                _get_group_start(group_num)[:] = regex_index
+                _get_group_start(group_num)[...] = regex_index
 
                 _runcmd(f"function {inner_start}")
                 ScoreIfMatches(regex_matched, 1).then(lambda: _runcmd("return 1"))
 
-                temp_end[:] = regex_stack[-1]
+                temp_end[...] = regex_stack[-1]
                 _get_group_end(group_num).__iset__(temp_end)
                 regex_stack[-1].remove()
 
-                temp_start[:] = regex_stack[-1]
+                temp_start[...] = regex_stack[-1]
                 _get_group_start(group_num).__iset__(temp_start)
                 regex_stack[-1].remove()
 
@@ -625,20 +625,20 @@ def compile_regex(pattern, flags=0, capture=False):
     node_id = ctx.next_func_id()
     terminal_func = ctx.get_generated_func_name(f"{base_name}_terminal")
     with ctx.push_context(terminal_func):
-        regex_matched[:] = 1
-        _get_group_end(0)[:] = regex_index
+        regex_matched[...] = 1
+        _get_group_end(0)[...] = regex_index
 
     start_func = _compile_sequence(ast, terminal_func, base_name, needs_capture)
 
     search_func = ctx.get_generated_func_name(f"{base_name}_search")
     with ctx.push_context(search_func):
         ScoreIfMatches(regex_matched, 1).then(lambda: _runcmd("return 1"))
-        _get_group_start(0)[:] = regex_index
+        _get_group_start(0)[...] = regex_index
         _runcmd(f"function {start_func}")
         ScoreIfMatches(regex_matched, 1).then(lambda: _runcmd("return 1"))
 
-        current_char[:] = -999
-        char_valid[:] = 0
+        current_char[...] = -999
+        char_valid[...] = 0
         macro_args.idx = regex_index
         _invoke_read_char()
 
@@ -696,13 +696,13 @@ class FlareRegexPattern:
         def eval_match(dest):
             _init_globals()
             temp_byte_array = nbt(addr=f"flare:temp regex_bytes_{ctx.next_temp_id()}", datatype=NBTType.ByteArray)
-            temp_byte_array[:] = target.to_ascii()
-            regex_matched[:] = 0
-            regex_index[:] = 0
-            _get_group_start(0)[:] = 0
-            regex_target[:] = temp_byte_array
+            temp_byte_array[...] = target.to_ascii()
+            regex_matched[...] = 0
+            regex_index[...] = 0
+            _get_group_start(0)[...] = 0
+            regex_target[...] = temp_byte_array
             _runcmd(f"function {self.start_func}")
-            dest[:] = regex_matched
+            dest[...] = regex_matched
             return dest
 
         return RegexMatch(target, eval_match, lambda: score(addr=f"#regex_out_{ctx.next_temp_id()}"),
@@ -719,12 +719,12 @@ class FlareRegexPattern:
         def eval_search(dest):
             _init_globals()
             temp_byte_array = nbt(addr=f"flare:temp regex_bytes_{ctx.next_temp_id()}", datatype=NBTType.ByteArray)
-            temp_byte_array[:] = target.to_ascii()
-            regex_matched[:] = 0
-            regex_index[:] = 0
-            regex_target[:] = temp_byte_array
+            temp_byte_array[...] = target.to_ascii()
+            regex_matched[...] = 0
+            regex_index[...] = 0
+            regex_target[...] = temp_byte_array
             _runcmd(f"function {self.start_func_search}")
-            dest[:] = regex_matched
+            dest[...] = regex_matched
             return dest
 
         return RegexMatch(target, eval_search, lambda: score(addr=f"#regex_out_{ctx.next_temp_id()}"),

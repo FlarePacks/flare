@@ -27,7 +27,7 @@ class float64(FlareValue):
                 self.__iset__(self._value_to_set)
 
     def __setitem__(self, key, value):
-        if isinstance(key, slice) and key.start is None and key.stop is None and key.step is None:
+        if key is ...:
             self.__iset__(value)
             return
         raise TypeError(f"'{type(self).__name__}' object does not support item assignment")
@@ -60,16 +60,16 @@ class float64(FlareValue):
         if self._addr is None:
             self._parse_addr(f"#f64_{ctx.next_temp_id()}")
             if self._value_to_set is not None:
-                self[:] = self._value_to_set
+                self[...] = self._value_to_set
 
     def __icopy__(self, varid: str, is_recursive: bool = False):
         if self._addr is None:
             self._parse_addr(ctx.get_score_var_addr(varid))
             if self._value_to_set is not None:
-                self[:] = self._value_to_set
+                self[...] = self._value_to_set
         else:
             dest = type(self)(addr=ctx.get_score_var_addr(varid))
-            dest[:] = self
+            dest[...] = self
             return dest
         return self
 
@@ -92,10 +92,10 @@ class float64(FlareValue):
 
         if isinstance(other, (int, float)):
             if other == 0.0:
-                self._sign[:] = 1
-                self._exp[:] = 0
-                self._mant_hi[:] = 0
-                self._mant_lo[:] = 0
+                self._sign[...] = 1
+                self._exp[...] = 0
+                self._mant_hi[...] = 0
+                self._mant_lo[...] = 0
                 return self
 
             m, e = frexp(other)
@@ -108,26 +108,26 @@ class float64(FlareValue):
             mant_hi = mant_int >> 26
             mant_lo = mant_int & 67108863
 
-            self._sign[:] = sign
-            self._exp[:] = e
-            self._mant_hi[:] = mant_hi
-            self._mant_lo[:] = mant_lo
+            self._sign[...] = sign
+            self._exp[...] = e
+            self._mant_hi[...] = mant_hi
+            self._mant_lo[...] = mant_lo
             return self
 
         if isinstance(other, float64):
             other._check_addr()
-            self._sign[:] = other._sign
-            self._exp[:] = other._exp
-            self._mant_hi[:] = other._mant_hi
-            self._mant_lo[:] = other._mant_lo
+            self._sign[...] = other._sign
+            self._exp[...] = other._exp
+            self._mant_hi[...] = other._mant_hi
+            self._mant_lo[...] = other._mant_lo
             return self
 
         if type(other).__name__ == "float32" or (hasattr(other, "_mant") and not hasattr(other, "_mant_hi")):
             other._check_addr()
-            self._sign[:] = other._sign
-            self._exp[:] = other._exp
-            self._mant_hi[:] = other._mant * 8
-            self._mant_lo[:] = 0
+            self._sign[...] = other._sign
+            self._exp[...] = other._exp
+            self._mant_hi[...] = other._mant * 8
+            self._mant_lo[...] = 0
             return self
 
         if is_lazy(other):
@@ -144,12 +144,12 @@ class float64(FlareValue):
                 res = outputs["res"]
 
                 a = type(a_in)(addr=f"#f64_add_a_{next_temp_id()} __flare_stdlib__")
-                a[:] = a_in
+                a[...] = a_in
                 b = type(b_in)(addr=f"#f64_add_b_{next_temp_id()} __flare_stdlib__")
-                b[:] = b_in
+                b[...] = b_in
 
                 diff = score(addr="#f64_add_diff __flare_stdlib__")
-                diff[:] = a._exp
+                diff[...] = a._exp
                 diff -= b._exp
 
                 (ScoreIfMatches(diff, (-2147483648, -1))).then(
@@ -184,7 +184,7 @@ class float64(FlareValue):
                 ScoreIfMatches(a._mant_lo, (67108864, 2147483647)).then(
                     lambda: [a._mant_hi.__iadd__(1), a._mant_lo.__isub__(67108864)])
 
-                a._sign[:] = 1
+                a._sign[...] = 1
                 is_neg = score(0, addr="#f64_add_neg __flare_stdlib__")
                 (ScoreIfMatches(a._mant_hi, (-2147483648, -1))).then(lambda: is_neg.__iset__(1))
                 ScoreIfMatches(is_neg, 1).then(
@@ -215,11 +215,11 @@ class float64(FlareValue):
                              a._mant_hi.__iadd__(score(addr="#f64_add_cy3 __flare_stdlib__"))],
                     namespace="__flare_stdlib__")
 
-                res[:] = a
+                res[...] = a
 
             _res = type(self)(addr=f"#f64_add_{next_temp_id()}")
             _invoke_stdlib("__flare_stdlib__:__float64_add", gen, {"a": self, "b": other}, {"res": _res})
-            self[:] = _res
+            self[...] = _res
             return self
 
         return self._try_binary("__iadd__", "+=", other)
@@ -227,7 +227,7 @@ class float64(FlareValue):
     def __isub__(self, other):
         if isinstance(other, float64):
             temp = type(self)()
-            temp[:] = other
+            temp[...] = other
             temp._sign *= -1
             self += temp
             return self
@@ -247,22 +247,22 @@ class float64(FlareValue):
                 res = outputs["res"]
 
                 a = type(a_in)(addr=f"#f64_mul_a_{next_temp_id()} __flare_stdlib__")
-                a[:] = a_in
+                a[...] = a_in
                 b = type(b_in)(addr=f"#f64_mul_b_{next_temp_id()} __flare_stdlib__")
-                b[:] = b_in
+                b[...] = b_in
 
                 a0 = score(addr="#f64_mul_a0 __flare_stdlib__")
                 a1 = score(addr="#f64_mul_a1 __flare_stdlib__")
                 a2 = score(addr="#f64_mul_a2 __flare_stdlib__")
                 a3 = score(addr="#f64_mul_a3 __flare_stdlib__")
 
-                a0[:] = a._mant_lo
+                a0[...] = a._mant_lo
                 a0 %= 8192
-                a1[:] = a._mant_lo
+                a1[...] = a._mant_lo
                 a1 /= 8192
-                a2[:] = a._mant_hi
+                a2[...] = a._mant_hi
                 a2 %= 8192
-                a3[:] = a._mant_hi
+                a3[...] = a._mant_hi
                 a3 /= 8192
 
                 b0 = score(addr="#f64_mul_b0 __flare_stdlib__")
@@ -270,63 +270,63 @@ class float64(FlareValue):
                 b2 = score(addr="#f64_mul_b2 __flare_stdlib__")
                 b3 = score(addr="#f64_mul_b3 __flare_stdlib__")
 
-                b0[:] = b._mant_lo
+                b0[...] = b._mant_lo
                 b0 %= 8192
-                b1[:] = b._mant_lo
+                b1[...] = b._mant_lo
                 b1 /= 8192
-                b2[:] = b._mant_hi
+                b2[...] = b._mant_hi
                 b2 %= 8192
-                b3[:] = b._mant_hi
+                b3[...] = b._mant_hi
                 b3 /= 8192
 
-                res._mant_hi[:] = a3
+                res._mant_hi[...] = a3
                 res._mant_hi *= b3
 
                 p5 = score(addr="#f64_mul_p5 __flare_stdlib__")
-                p5[:] = a3
+                p5[...] = a3
                 p5 *= b2
                 t5 = score(addr="#f64_mul_t5 __flare_stdlib__")
-                t5[:] = a2
+                t5[...] = a2
                 t5 *= b3
                 p5 += t5
 
                 p4 = score(addr="#f64_mul_p4 __flare_stdlib__")
-                p4[:] = a3
+                p4[...] = a3
                 p4 *= b1
                 t4 = score(addr="#f64_mul_t4a __flare_stdlib__")
-                t4[:] = a2
+                t4[...] = a2
                 t4 *= b2
                 p4 += t4
-                t4[:] = a1
+                t4[...] = a1
                 t4 *= b3
                 p4 += t4
 
                 p3 = score(addr="#f64_mul_p3 __flare_stdlib__")
-                p3[:] = a3
+                p3[...] = a3
                 p3 *= b0
                 t3 = score(addr="#f64_mul_t3a __flare_stdlib__")
-                t3[:] = a2
+                t3[...] = a2
                 t3 *= b1
                 p3 += t3
-                t3[:] = a1
+                t3[...] = a1
                 t3 *= b2
                 p3 += t3
-                t3[:] = a0
+                t3[...] = a0
                 t3 *= b3
                 p3 += t3
 
                 p2 = score(addr="#f64_mul_p2 __flare_stdlib__")
-                p2[:] = a2
+                p2[...] = a2
                 p2 *= b0
                 t2 = score(addr="#f64_mul_t2a __flare_stdlib__")
-                t2[:] = a1
+                t2[...] = a1
                 t2 *= b1
                 p2 += t2
-                t2[:] = a0
+                t2[...] = a0
                 t2 *= b2
                 p2 += t2
 
-                res._mant_lo[:] = p5
+                res._mant_lo[...] = p5
                 res._mant_lo %= 8192
                 res._mant_lo *= 8192
 
@@ -342,14 +342,14 @@ class float64(FlareValue):
                 res._mant_lo += p2
 
                 cy = score(addr="#f64_mul_cy __flare_stdlib__")
-                cy[:] = res._mant_lo
+                cy[...] = res._mant_lo
                 cy /= 67108864
                 res._mant_lo %= 67108864
                 res._mant_hi += cy
 
-                res._sign[:] = a._sign
+                res._sign[...] = a._sign
                 res._sign *= b._sign
-                res._exp[:] = a._exp
+                res._exp[...] = a._exp
                 res._exp += b._exp
 
                 is_zero = score(0, addr="#f64_mul_zero __flare_stdlib__")
@@ -375,7 +375,7 @@ class float64(FlareValue):
 
             _res = type(self)(addr=f"#f64_mul_{next_temp_id()}")
             _invoke_stdlib("__flare_stdlib__:__float64_mul", gen, {"a": self, "b": other}, {"res": _res})
-            self[:] = _res
+            self[...] = _res
             return self
 
         return self._try_binary("__imul__", "*=", other)
@@ -390,13 +390,13 @@ class float64(FlareValue):
                 res = outputs["res"]
 
                 a = type(a_in)(addr=f"#f64_div_a_{next_temp_id()} __flare_stdlib__")
-                a[:] = a_in
+                a[...] = a_in
                 b = type(b_in)(addr=f"#f64_div_b_{next_temp_id()} __flare_stdlib__")
-                b[:] = b_in
+                b[...] = b_in
 
-                res._sign[:] = a._sign
+                res._sign[...] = a._sign
                 res._sign *= b._sign
-                res._exp[:] = a._exp
+                res._exp[...] = a._exp
                 res._exp -= b._exp
                 res._exp -= 1
 
@@ -427,8 +427,8 @@ class float64(FlareValue):
                         ScoreIfMatches(a._mant_lo, (67108864, 2147483647)).then(
                             lambda: [a._mant_hi.__iadd__(1), a._mant_lo.__isub__(67108864)])
 
-                res._mant_hi[:] = q_hi
-                res._mant_lo[:] = q_lo
+                res._mant_hi[...] = q_hi
+                res._mant_lo[...] = q_lo
 
                 is_zero = score(0, addr="#f64_div_zero __flare_stdlib__")
                 (ScoreIfMatches(res._mant_hi, 0) & ScoreIfMatches(res._mant_lo, 0)).then(lambda: is_zero.__iset__(1))
@@ -453,7 +453,7 @@ class float64(FlareValue):
 
             _res = type(self)(addr=f"#f64_div_{next_temp_id()}")
             _invoke_stdlib("__flare_stdlib__:__float64_div", gen, {"a": self, "b": other}, {"res": _res})
-            self[:] = _res
+            self[...] = _res
             return self
 
         return self._try_binary("__idiv__", "/=", other)
@@ -462,11 +462,11 @@ class float64(FlareValue):
         def gen(inputs, outputs):
             x = inputs["x"]
             res = outputs["res"]
-            res[:] = x
+            res[...] = x
 
             shift = score(addr="#f64_flr_sh __flare_stdlib__")
             shc = score(addr="#f64_flr_shc __flare_stdlib__")
-            shift[:] = 52
+            shift[...] = 52
             shift -= res._exp
 
             ScoreIfMatches(res._exp, (-2147483648, -1)).then(
@@ -517,17 +517,17 @@ class float64(FlareValue):
             x = inputs["x"]
             res = outputs["res"]
 
-            res._mant_hi[:] = 80530636
-            res._mant_lo[:] = 0
-            res._exp[:] = x._exp
+            res._mant_hi[...] = 80530636
+            res._mant_lo[...] = 0
+            res._exp[...] = x._exp
             res._exp /= 2
-            res._sign[:] = 1
+            res._sign[...] = 1
 
             two = type(x)(2.0)
 
             for _ in range(5):
                 temp = type(x)(addr="#f64_sqtmp __flare_stdlib__")
-                temp[:] = x
+                temp[...] = x
                 temp /= res
                 res += temp
                 res /= two
@@ -540,14 +540,14 @@ class float64(FlareValue):
         def gen(inputs, outputs):
             x_in = inputs["x"]
             x = type(x_in)(addr=f"#loc_x_{next_temp_id()} __flare_stdlib__")
-            x[:] = x_in
+            x[...] = x_in
             res = outputs["res"]
 
             pi = type(x)(math.pi)
             two_pi = type(x)(math.pi * 2)
 
             x_div_2pi = type(x)(addr="#f64_sin_xdiv __flare_stdlib__")
-            x_div_2pi[:] = x
+            x_div_2pi[...] = x
             x_div_2pi /= two_pi
             x_div_2pi = x_div_2pi.__floor__()
             x_div_2pi *= two_pi
@@ -556,11 +556,11 @@ class float64(FlareValue):
             is_neg = score(0, addr="#f64_sin_neg __flare_stdlib__")
 
             sub = type(x)(addr="#f64_sin_s __flare_stdlib__")
-            sub[:] = x
+            sub[...] = x
             sub -= pi
 
             cond_pi = type(x)(addr="#f64_sin_cpi __flare_stdlib__")
-            cond_pi[:] = 0
+            cond_pi[...] = 0
             ScoreIfMatches(sub._sign, 1).then(
                 lambda: [is_neg.__iset__(1), cond_pi._sign.__iset__(pi._sign), cond_pi._exp.__iset__(pi._exp),
                          cond_pi._mant_hi.__iset__(pi._mant_hi), cond_pi._mant_lo.__iset__(pi._mant_lo)])
@@ -568,14 +568,14 @@ class float64(FlareValue):
 
             half_pi = type(x)(math.pi / 2.0)
             sub_half = type(x)(addr="#f64_sin_sh __flare_stdlib__")
-            sub_half[:] = x
+            sub_half[...] = x
             sub_half -= half_pi
 
             is_reflect = score(0, addr="#f64_sin_isref __flare_stdlib__")
             ScoreIfMatches(sub_half._sign, 1).then(lambda: is_reflect.__iset__(1))
 
             x_reflected = type(x)(addr="#f64_sin_xr __flare_stdlib__")
-            x_reflected[:] = pi
+            x_reflected[...] = pi
             x_reflected -= x
 
             ScoreIfMatches(is_reflect, 1).then(
@@ -583,34 +583,34 @@ class float64(FlareValue):
                          x._mant_hi.__iset__(x_reflected._mant_hi), x._mant_lo.__iset__(x_reflected._mant_lo)])
 
             x2 = type(x)(addr="#f64_sin_x2 __flare_stdlib__")
-            x2[:] = x
+            x2[...] = x
             x2 *= x
             x3 = type(x)(addr="#f64_sin_x3 __flare_stdlib__")
-            x3[:] = x2
+            x3[...] = x2
             x3 *= x
             x5 = type(x)(addr="#f64_sin_x5 __flare_stdlib__")
-            x5[:] = x3
+            x5[...] = x3
             x5 *= x2
             x7 = type(x)(addr="#f64_sin_x7 __flare_stdlib__")
-            x7[:] = x5
+            x7[...] = x5
             x7 *= x2
             x9 = type(x)(addr="#f64_sin_x9 __flare_stdlib__")
-            x9[:] = x7
+            x9[...] = x7
             x9 *= x2
             x11 = type(x)(addr="#f64_sin_x11 __flare_stdlib__")
-            x11[:] = x9
+            x11[...] = x9
             x11 *= x2
             x13 = type(x)(addr="#f64_sin_x13 __flare_stdlib__")
-            x13[:] = x11
+            x13[...] = x11
             x13 *= x2
             x15 = type(x)(addr="#f64_sin_x15 __flare_stdlib__")
-            x15[:] = x13
+            x15[...] = x13
             x15 *= x2
             x17 = type(x)(addr="#f64_sin_x17 __flare_stdlib__")
-            x17[:] = x15
+            x17[...] = x15
             x17 *= x2
             x19 = type(x)(addr="#f64_sin_x19 __flare_stdlib__")
-            x19[:] = x17
+            x19[...] = x17
             x19 *= x2
 
             c3 = type(x)(1.0 / 6.0)
@@ -624,34 +624,34 @@ class float64(FlareValue):
             c19 = type(x)(1.0 / 121645100408832000.0)
 
             t3 = type(x)(addr="#f64_sin_t3 __flare_stdlib__")
-            t3[:] = x3
+            t3[...] = x3
             t3 *= c3
             t5 = type(x)(addr="#f64_sin_t5 __flare_stdlib__")
-            t5[:] = x5
+            t5[...] = x5
             t5 *= c5
             t7 = type(x)(addr="#f64_sin_t7 __flare_stdlib__")
-            t7[:] = x7
+            t7[...] = x7
             t7 *= c7
             t9 = type(x)(addr="#f64_sin_t9 __flare_stdlib__")
-            t9[:] = x9
+            t9[...] = x9
             t9 *= c9
             t11 = type(x)(addr="#f64_sin_t11 __flare_stdlib__")
-            t11[:] = x11
+            t11[...] = x11
             t11 *= c11
             t13 = type(x)(addr="#f64_sin_t13 __flare_stdlib__")
-            t13[:] = x13
+            t13[...] = x13
             t13 *= c13
             t15 = type(x)(addr="#f64_sin_t15 __flare_stdlib__")
-            t15[:] = x15
+            t15[...] = x15
             t15 *= c15
             t17 = type(x)(addr="#f64_sin_t17 __flare_stdlib__")
-            t17[:] = x17
+            t17[...] = x17
             t17 *= c17
             t19 = type(x)(addr="#f64_sin_t19 __flare_stdlib__")
-            t19[:] = x19
+            t19[...] = x19
             t19 *= c19
 
-            res[:] = x
+            res[...] = x
             res -= t3
             res += t5
             res -= t7
@@ -672,11 +672,11 @@ class float64(FlareValue):
         def gen(inputs, outputs):
             x_in = inputs["x"]
             x = type(x_in)(addr=f"#loc_x_{next_temp_id()} __flare_stdlib__")
-            x[:] = x_in
+            x[...] = x_in
             res = outputs["res"]
             half_pi = type(x)(math.pi / 2.0)
             x += half_pi
-            res[:] = x.__sin__()
+            res[...] = x.__sin__()
 
         _res = type(self)(addr=f"#f64_cos_r_{next_temp_id()}")
         _invoke_stdlib("__flare_stdlib__:__float64_cos", gen, {"x": self}, {"res": _res})
@@ -686,13 +686,13 @@ class float64(FlareValue):
         def gen(inputs, outputs):
             x_in = inputs["x"]
             x = type(x_in)(addr=f"#loc_x_{next_temp_id()} __flare_stdlib__")
-            x[:] = x_in
+            x[...] = x_in
             res = outputs["res"]
             s = type(x)(addr="#f64_tan_s __flare_stdlib__")
             c = type(x)(addr="#f64_tan_c __flare_stdlib__")
-            s[:] = x.__sin__()
-            c[:] = x.__cos__()
-            res[:] = s
+            s[...] = x.__sin__()
+            c[...] = x.__cos__()
+            res[...] = s
             res /= c
 
         _res = type(self)(addr=f"#f64_tan_{next_temp_id()}")
@@ -705,7 +705,7 @@ class float64(FlareValue):
             res = outputs["res"]
 
             x = type(self)(addr=f"#f64_exp_x_{next_temp_id()} __flare_stdlib__")
-            x[:] = x_in
+            x[...] = x_in
             x /= float64(16.0)
 
             c2 = float64(1.0 / 2.0)
@@ -716,7 +716,7 @@ class float64(FlareValue):
             c7 = float64(1.0 / 5040.0)
 
             term = type(self)(addr=f"#f64_exp_t_{next_temp_id()} __flare_stdlib__")
-            term[:] = x
+            term[...] = x
             term *= c7
 
             term += c6
@@ -743,7 +743,7 @@ class float64(FlareValue):
             term *= type(self)(addr=f"#f64_exp_cp_{next_temp_id()} __flare_stdlib__").__iset__(term)
             term *= type(self)(addr=f"#f64_exp_cp_{next_temp_id()} __flare_stdlib__").__iset__(term)
             term *= type(self)(addr=f"#f64_exp_cp_{next_temp_id()} __flare_stdlib__").__iset__(term)
-            res[:] = term
+            res[...] = term
 
         _res = type(self)(addr=f"#f64_exp_r_{next_temp_id()}")
         _invoke_stdlib("__flare_stdlib__:__float64_exp", gen, {"x": self}, {"res": _res})
@@ -753,24 +753,24 @@ class float64(FlareValue):
         def gen(inputs, outputs):
             x_in = inputs["x"]
             x = type(x_in)(addr=f"#loc_x_{next_temp_id()} __flare_stdlib__")
-            x[:] = x_in
+            x[...] = x_in
             res = outputs["res"]
             guess = type(x)(1.0)
             two = type(x)(2.0)
             for _ in range(5):
                 e_y = guess.__exp__()
                 num = type(x)(addr="#f64_log_n __flare_stdlib__")
-                num[:] = x
+                num[...] = x
                 num -= e_y
                 num *= two
 
                 den = type(x)(addr="#f64_log_d __flare_stdlib__")
-                den[:] = x
+                den[...] = x
                 den += e_y
 
                 num /= den
                 guess += num
-            res[:] = guess
+            res[...] = guess
 
         _res = type(self)(addr=f"#f64_log_r_{next_temp_id()}")
         _invoke_stdlib("__flare_stdlib__:__float64_log", gen, {"x": self}, {"res": _res})
@@ -780,23 +780,23 @@ class float64(FlareValue):
         def gen(inputs, outputs):
             x_in = inputs["x"]
             x = type(x_in)(addr=f"#loc_x_{next_temp_id()} __flare_stdlib__")
-            x[:] = x_in
+            x[...] = x_in
             res = outputs["res"]
 
             one = type(x)(1.0)
             one._check_addr()
             x_sq = type(x)(addr="#f64_asin_xsq __flare_stdlib__")
-            x_sq[:] = x
+            x_sq[...] = x
             x_sq *= x
 
             inner = type(x)(addr="#f64_asin_in __flare_stdlib__")
-            inner[:] = one
+            inner[...] = one
             inner -= x_sq
 
             sq = inner.__sqrt__()
 
             at2 = x.__atan2__(sq)
-            res[:] = at2
+            res[...] = at2
 
         _res = type(self)(addr=f"#f64_asin_{next_temp_id()}")
         _invoke_stdlib("__flare_stdlib__:__float64_asin", gen, {"x": self}, {"res": _res})
@@ -806,23 +806,23 @@ class float64(FlareValue):
         def gen(inputs, outputs):
             x_in = inputs["x"]
             x = type(x_in)(addr=f"#loc_x_{next_temp_id()} __flare_stdlib__")
-            x[:] = x_in
+            x[...] = x_in
             res = outputs["res"]
 
             one = type(x)(1.0)
             one._check_addr()
             x_sq = type(x)(addr="#f64_acos_xsq __flare_stdlib__")
-            x_sq[:] = x
+            x_sq[...] = x
             x_sq *= x
 
             inner = type(x)(addr="#f64_acos_in __flare_stdlib__")
-            inner[:] = one
+            inner[...] = one
             inner -= x_sq
 
             sq = inner.__sqrt__()
 
             at2 = sq.__atan2__(x)
-            res[:] = at2
+            res[...] = at2
 
         _res = type(self)(addr=f"#f64_acos_{next_temp_id()}")
         _invoke_stdlib("__flare_stdlib__:__float64_acos", gen, {"x": self}, {"res": _res})
@@ -832,15 +832,15 @@ class float64(FlareValue):
         def gen(inputs, outputs):
             x_in = inputs["x"]
             x = type(x_in)(addr=f"#loc_x_{next_temp_id()} __flare_stdlib__")
-            x[:] = x_in
+            x[...] = x_in
             res = outputs["res"]
 
             is_neg = score(0, addr="#f64_atan_neg __flare_stdlib__")
             ScoreIfMatches(x._sign, -1).then(lambda: is_neg.__iset__(1))
 
             abs_x = type(x)(addr="#f64_atan_ax __flare_stdlib__")
-            abs_x[:] = x
-            abs_x._sign[:] = 1
+            abs_x[...] = x
+            abs_x._sign[...] = 1
 
             invert = score(0, addr="#f64_atan_inv __flare_stdlib__")
             one = type(x)(1.0)
@@ -853,26 +853,26 @@ class float64(FlareValue):
                 abs_x._mant_lo, ">", one._mant_lo)).then(lambda: invert.__iset__(1))
 
             x_calc = type(x)(addr="#f64_atan_xc __flare_stdlib__")
-            x_calc[:] = abs_x
+            x_calc[...] = abs_x
             ScoreIfMatches(invert, 1).then(lambda: [x_calc.__iset__(one), x_calc.__idiv__(abs_x)])
 
             x_sq = type(x)(addr="#f64_atan_xsq __flare_stdlib__")
-            x_sq[:] = x_calc
+            x_sq[...] = x_calc
             x_sq *= x_calc
 
             denom = type(x)(addr="#f64_atan_d __flare_stdlib__")
-            denom[:] = x_sq
+            denom[...] = x_sq
             denom *= type(x)(0.28125)
             denom += one
 
             atan_val = type(x)(addr="#f64_atan_v __flare_stdlib__")
-            atan_val[:] = x_calc
+            atan_val[...] = x_calc
             atan_val /= denom
 
             pi_half = type(x)(1.57079632)
             ScoreIfMatches(invert, 1).then(lambda: [atan_val.__ineg__(), atan_val.__iadd__(pi_half)])
 
-            res[:] = atan_val
+            res[...] = atan_val
             ScoreIfMatches(is_neg, 1).then(lambda: res.__ineg__())
 
         _res = type(self)(addr=f"#f64_atan_{next_temp_id()}")
@@ -883,10 +883,10 @@ class float64(FlareValue):
         def gen(inputs, outputs):
             y_in_in = inputs["y"]
             y_in = type(y_in_in)(addr=f"#loc_y_in_{next_temp_id()} __flare_stdlib__")
-            y_in[:] = y_in_in
+            y_in[...] = y_in_in
             x_in_in = inputs["x"]
             x_in = type(x_in_in)(addr=f"#loc_x_in_{next_temp_id()} __flare_stdlib__")
-            x_in[:] = x_in_in
+            x_in[...] = x_in_in
             res = outputs["res"]
 
             y_is_zero = score(0, addr="#f64_at2_yz __flare_stdlib__")
@@ -898,11 +898,11 @@ class float64(FlareValue):
             pi_half = type(res)(1.57079632)
 
             atan_val = type(res)(addr="#f64_at2_at __flare_stdlib__")
-            atan_val[:] = y_in
+            atan_val[...] = y_in
             atan_val /= x_in
-            atan_val[:] = atan_val.__atan__()
+            atan_val[...] = atan_val.__atan__()
 
-            res[:] = atan_val
+            res[...] = atan_val
 
             ScoreIfMatches(x_in._sign, -1) & ScoreIfMatches(y_in._sign, 1).then(lambda: res.__iadd__(pi))
             ScoreIfMatches(x_in._sign, -1) & ScoreIfMatches(y_in._sign, -1).then(lambda: res.__isub__(pi))
@@ -919,18 +919,18 @@ class float64(FlareValue):
         def gen(inputs, outputs):
             x_in = inputs["x"]
             x = type(x_in)(addr=f"#loc_x_{next_temp_id()} __flare_stdlib__")
-            x[:] = x_in
+            x[...] = x_in
             res = outputs["res"]
 
             ex = x.__exp__()
 
             neg_x = type(x)(addr="#f64_sinh_nx __flare_stdlib__")
-            neg_x[:] = x
+            neg_x[...] = x
             neg_x.__ineg__()
 
             emx = neg_x.__exp__()
 
-            res[:] = ex
+            res[...] = ex
             res -= emx
             res /= type(x)(2.0)
 
@@ -942,18 +942,18 @@ class float64(FlareValue):
         def gen(inputs, outputs):
             x_in = inputs["x"]
             x = type(x_in)(addr=f"#loc_x_{next_temp_id()} __flare_stdlib__")
-            x[:] = x_in
+            x[...] = x_in
             res = outputs["res"]
 
             ex = x.__exp__()
 
             neg_x = type(x)(addr="#f64_cosh_nx __flare_stdlib__")
-            neg_x[:] = x
+            neg_x[...] = x
             neg_x.__ineg__()
 
             emx = neg_x.__exp__()
 
-            res[:] = ex
+            res[...] = ex
             res += emx
             res /= type(x)(2.0)
 
@@ -965,13 +965,13 @@ class float64(FlareValue):
         def gen(inputs, outputs):
             x_in = inputs["x"]
             x = type(x_in)(addr=f"#loc_x_{next_temp_id()} __flare_stdlib__")
-            x[:] = x_in
+            x[...] = x_in
             res = outputs["res"]
 
             sh = x.__sinh__()
             ch = x.__cosh__()
 
-            res[:] = sh
+            res[...] = sh
             res /= ch
 
         _res = type(self)(addr=f"#f64_tanh_{next_temp_id()}")
@@ -982,17 +982,17 @@ class float64(FlareValue):
         def gen(inputs, outputs):
             x_in = inputs["x"]
             x = type(x_in)(addr=f"#loc_x_{next_temp_id()} __flare_stdlib__")
-            x[:] = x_in
+            x[...] = x_in
             res = outputs["res"]
 
             x_sq = type(x)(addr="#f64_asinh_xsq __flare_stdlib__")
-            x_sq[:] = x
+            x_sq[...] = x
             x_sq *= x
             x_sq += type(x)(1.0)
 
             sq = x_sq.__sqrt__()
             sq += x
-            res[:] = sq.__log__()
+            res[...] = sq.__log__()
 
         _res = type(self)(addr=f"#f64_asinh_{next_temp_id()}")
         _invoke_stdlib("__flare_stdlib__:__float64_asinh", gen, {"x": self}, {"res": _res})
@@ -1002,17 +1002,17 @@ class float64(FlareValue):
         def gen(inputs, outputs):
             x_in = inputs["x"]
             x = type(x_in)(addr=f"#loc_x_{next_temp_id()} __flare_stdlib__")
-            x[:] = x_in
+            x[...] = x_in
             res = outputs["res"]
 
             x_sq = type(x)(addr="#f64_acosh_xsq __flare_stdlib__")
-            x_sq[:] = x
+            x_sq[...] = x
             x_sq *= x
             x_sq -= type(x)(1.0)
 
             sq = x_sq.__sqrt__()
             sq += x
-            res[:] = sq.__log__()
+            res[...] = sq.__log__()
 
         _res = type(self)(addr=f"#f64_acosh_{next_temp_id()}")
         _invoke_stdlib("__flare_stdlib__:__float64_acosh", gen, {"x": self}, {"res": _res})
@@ -1022,24 +1022,24 @@ class float64(FlareValue):
         def gen(inputs, outputs):
             x_in = inputs["x"]
             x = type(x_in)(addr=f"#loc_x_{next_temp_id()} __flare_stdlib__")
-            x[:] = x_in
+            x[...] = x_in
             res = outputs["res"]
 
             one = type(x)(1.0)
             one._check_addr()
 
             num = type(x)(addr="#f64_atanh_n __flare_stdlib__")
-            num[:] = one
+            num[...] = one
             num += x
 
             den = type(x)(addr="#f64_atanh_d __flare_stdlib__")
-            den[:] = one
+            den[...] = one
             den -= x
 
             num /= den
 
             lg = num.__log__()
-            res[:] = lg
+            res[...] = lg
             res /= type(x)(2.0)
 
         _res = type(self)(addr=f"#f64_atanh_{next_temp_id()}")
@@ -1053,30 +1053,30 @@ class float64(FlareValue):
         tid = next_temp_id()
 
         mlo_tmp = score(addr=f"#f64prt_ml_{tid} {ctx.temp_obj}")
-        mlo_tmp[:] = self._mant_lo
+        mlo_tmp[...] = self._mant_lo
 
         b = bigscore[16](addr=f"#f64prt_b_{tid}")
-        b[:] = 0
-        b.get_limb(0)[:] = mlo_tmp
+        b[...] = 0
+        b.get_limb(0)[...] = mlo_tmp
         b.get_limb(0).__imod__(10000)
         mlo_tmp /= 10000
-        b.get_limb(1)[:] = mlo_tmp
+        b.get_limb(1)[...] = mlo_tmp
         b.get_limb(1).__imod__(10000)
         mlo_tmp /= 10000
-        b.get_limb(2)[:] = mlo_tmp
+        b.get_limb(2)[...] = mlo_tmp
 
         mhi_tmp = score(addr=f"#f64prt_mh_{tid} {ctx.temp_obj}")
-        mhi_tmp[:] = self._mant_hi
+        mhi_tmp[...] = self._mant_hi
 
         temp_hi = bigscore[16](addr=f"#f64prt_th_{tid}")
-        temp_hi[:] = 0
-        temp_hi.get_limb(0)[:] = mhi_tmp
+        temp_hi[...] = 0
+        temp_hi.get_limb(0)[...] = mhi_tmp
         temp_hi.get_limb(0).__imod__(10000)
         mhi_tmp /= 10000
-        temp_hi.get_limb(1)[:] = mhi_tmp
+        temp_hi.get_limb(1)[...] = mhi_tmp
         temp_hi.get_limb(1).__imod__(10000)
         mhi_tmp /= 10000
-        temp_hi.get_limb(2)[:] = mhi_tmp
+        temp_hi.get_limb(2)[...] = mhi_tmp
 
         temp_hi *= bigscore[16](67108864, addr=f"#f64prt_m_{tid}")
 
@@ -1084,7 +1084,7 @@ class float64(FlareValue):
         b *= bigscore[16](10000000000000000, addr=f"#f64prt_c_{tid}")
 
         exp_adj = score(addr=f"#f64prt_e_{tid} {ctx.temp_obj}")
-        exp_adj[:] = self._exp
+        exp_adj[...] = self._exp
         exp_adj -= score(52)
 
         ScoreIfMatches(exp_adj, (1, 1000000)).while_then(lambda: [b.__imul__(2), exp_adj.__isub__(1)])
@@ -1103,7 +1103,7 @@ class float64(FlareValue):
             limb = b.get_limb(i)
             f64ip = nbt(addr=f"{temp_storage} __f64ip_{tid}_{i}")[str]
             f64iv = nbt(addr=f"{temp_storage} __f64iv_{tid}_{i}")[int]
-            f64iv[:] = limb
+            f64iv[...] = limb
             if i < 15:
                 (ScoreIfMatches(started, 1) & ScoreIfMatches(limb, (0, 9))).then(lambda: f64ip.__iset__("000"))
                 (ScoreIfMatches(started, 1) & ScoreIfMatches(limb, (10, 99))).then(lambda: f64ip.__iset__("00"))
@@ -1129,7 +1129,7 @@ class float64(FlareValue):
             limb = b.get_limb(i)
             f64fp = nbt(addr=f"{temp_storage} __f64fp_{tid}_{i}")[str]
             f64fv = nbt(addr=f"{temp_storage} __f64fv_{tid}_{i}")[int]
-            f64fv[:] = limb
+            f64fv[...] = limb
             ScoreIfMatches(limb, (1, 9)).then(lambda: f64fp.__iset__("000"))
             ScoreIfMatches(limb, (10, 99)).then(lambda: f64fp.__iset__("00"))
             ScoreIfMatches(limb, (100, 999)).then(lambda: f64fp.__iset__("0"))
@@ -1144,24 +1144,24 @@ class float64(FlareValue):
         self._check_addr()
 
         bits = bigscore[2](addr=f"#f64_bits_{next_temp_id()}")
-        bits[:] = 0
+        bits[...] = 0
 
         exp_part = score(addr=f"#f64_exp_{next_temp_id()}")
-        exp_part[:] = self._exp
+        exp_part[...] = self._exp
         exp_part += 1023
         ScoreIfMatches(exp_part, (-inf, 0)).then(lambda: exp_part.__iset__(0))
 
         b0 = score(addr=f"#f64_b0_{next_temp_id()}")
         b1 = score(addr=f"#f64_b1_{next_temp_id()}")
-        b1[:] = exp_part
+        b1[...] = exp_part
         b1 *= 1048576
 
         mant_hi_tmp = score(addr=f"#f64_mht_{next_temp_id()}")
-        mant_hi_tmp[:] = self._mant_hi
+        mant_hi_tmp[...] = self._mant_hi
         ScoreIfMatches(mant_hi_tmp, (67108864, inf)).then(lambda: mant_hi_tmp.__isub__(67108864))
 
         b1 += mant_hi_tmp
-        b0[:] = self._mant_lo
+        b0[...] = self._mant_lo
 
         pass
 
@@ -1186,7 +1186,7 @@ def score_to_float64(s: score, dest: float64 = None) -> float64:
     mult_sign = 1 if mult >= 0 else -1
     mult = abs(mult)
 
-    dest._sign[:] = mult_sign
+    dest._sign[...] = mult_sign
     ScoreIfMatches(val, (-inf, -1)).then(lambda: [dest._sign.__imul__(-1), val.__imul__(-1)])
 
     def _convert_nonzero():
@@ -1202,8 +1202,8 @@ def score_to_float64(s: score, dest: float64 = None) -> float64:
         ScoreIfMatches(val_raw, (134217728, inf)).then(lambda: [e_int.__iadd__(2), val.__idiv__(4)])
         ScoreIfMatches(val_raw, (67108864, inf)).then(lambda: [e_int.__iadd__(1), val.__idiv__(2)])
 
-        dest._mant_hi[:] = val
-        dest._mant_lo[:] = 0
+        dest._mant_hi[...] = val
+        dest._mant_lo[...] = 0
 
         if mult != 1.0:
             m_m, e_m = math.frexp(mult)
@@ -1215,9 +1215,9 @@ def score_to_float64(s: score, dest: float64 = None) -> float64:
                 dest._mant_hi /= 64
                 ScoreIfMatches(dest._mant_hi, (67108864, inf)).then(
                     lambda: [e_int.__iadd__(1), dest._mant_hi.__idiv__(2)])
-            dest._exp[:] = e_int + 26 + e_m
+            dest._exp[...] = e_int + 26 + e_m
         else:
-            dest._exp[:] = e_int + 26
+            dest._exp[...] = e_int + 26
 
     ScoreIfMatches(val, (-inf, -1)).then(_convert_nonzero)
     ScoreIfMatches(val, (1, inf)).then(_convert_nonzero)
@@ -1242,7 +1242,7 @@ def float64_to_score(f: float64, dest: score = None, multiplier: float = 1.0) ->
         mult_sign = 1 if K >= 0 else -1
 
         val = f._mant_hi._alloc_temp(prefix="#f64_to_sc_val")
-        val[:] = f._mant_hi
+        val[...] = f._mant_hi
 
         if m_K != 1.0:
             scale_factor = int(round(m_K * 64))
@@ -1251,7 +1251,7 @@ def float64_to_score(f: float64, dest: score = None, multiplier: float = 1.0) ->
 
         const_shift = e_K - 26
         shift = score(addr=f"#f64_to_sc_sh_{next_temp_id()}")
-        shift[:] = f._exp
+        shift[...] = f._exp
         if const_shift != 0:
             shift += const_shift
 

@@ -14,11 +14,11 @@ class _Storage:
 
     def __setattr__(self, name, value):
         target = getattr(self, name)
-        target[:] = value
+        target[...] = value
 
     def __getitem__(self, item):
         return nbt(addr=f"storage {item}", datatype=None)
 
     def __setitem__(self, key, value):
         target = self[key]
-        target[:] = value
+        target[...] = value

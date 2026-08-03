@@ -498,7 +498,7 @@ class _MacroGroup:
         else:
             for m in self.macros:
                 temp_nbt = nbt(addr=f"storage flare:macro {m.name}")
-                temp_nbt[:] = m.value
+                temp_nbt[...] = m.value
 
             with ctx.push_context(func_name):
                 body_func()
