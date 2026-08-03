@@ -1072,6 +1072,9 @@ class nbt(FlareValue, NBTStringMethods):
             item = slice(item, item + 1)
 
         if isinstance(item, slice):
+            is_full_slice = item.start is None and item.stop is None and item.step is None
+            if is_full_slice and not self.is_floaty() and self._type not in (NBTType.String,):
+                return self.__getitem__({})
             return self._slice_string(item)
 
         if self.is_number():
