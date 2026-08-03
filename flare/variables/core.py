@@ -115,7 +115,7 @@ class FlareValue(ABC, metaclass=FlareClassMeta):
         raise NotImplementedError()
 
     def __setitem__(self, key, value):
-        if isinstance(key, slice) and key.start is None and key.stop is None and key.step is None:
+        if key is Ellipsis:
             self.__iset__(value)
             return
         raise TypeError(f"'{type(self).__name__}' object does not support item assignment")
@@ -393,7 +393,7 @@ class BinaryOp(FlareValue):
         if isinstance(left_node, (BinaryOp, UnaryOp, LazyOp, MathOp)):
             left_node._compile_into(dest)
         else:
-            dest[:] = left_node
+            dest[...] = left_node
         if isinstance(right_node, (BinaryOp, UnaryOp, LazyOp, MathOp)):
             temp = self._alloc_temp(dest)
             right_node._compile_into(temp)
@@ -465,7 +465,7 @@ class UnaryOp(FlareValue):
         if isinstance(self.operand, (BinaryOp, UnaryOp)):
             self.operand._compile_into(dest)
         else:
-            dest[:] = self.operand
+            dest[...] = self.operand
         if hasattr(dest, iop):
             getattr(dest, iop)()
         elif self.op == "neg":
@@ -477,7 +477,7 @@ class UnaryOp(FlareValue):
                     f"execute if score {ctx.addr(dest)} matches ..-1 run scoreboard players operation {ctx.addr(dest)} *= {ctx.addr(m1)}")
             else:
                 temp = dest._alloc_temp()
-                temp[:] = dest
+                temp[...] = dest
                 temp *= -1
                 cond = _compile_relational(dest < 0)
                 mod_cmd = ctx._emit_data_modify_from(ctx.addr(dest), "set", ctx.addr(temp))
@@ -684,7 +684,7 @@ class macro:
         func_name = f"{ctx._current_namespace}:macro_{ctx.next_func_id()}"
 
         temp_nbt = nbt(addr=f"storage flare:macro {self.name}")
-        temp_nbt[:] = self.value
+        temp_nbt[...] = self.value
 
         with ctx.push_context(func_name):
             body_func()

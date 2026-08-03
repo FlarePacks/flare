@@ -552,7 +552,7 @@ def _string_mul(self: nbt, other):
         if isinstance(other, score):
             other_copy = score(other)
             t = self._alloc_temp()
-            t[:] = self
+            t[...] = self
             _runcmd(f"data modify {addr(self)} set value \"\"")
 
             def _while_cond():
@@ -572,7 +572,7 @@ def _string_mul(self: nbt, other):
             if other == 1:
                 return self
             t = self._alloc_temp()
-            t[:] = self
+            t[...] = self
             for _ in range(other - 1):
                 self += t
             return self
@@ -618,7 +618,7 @@ def _sequence_mul(self: nbt, other):
         if isinstance(other, score):
             other_copy = score(other)
             t = self._alloc_temp()
-            t[:] = self
+            t[...] = self
             _runcmd(f"data modify {addr(self)} set value []")
 
             def _while_cond():
@@ -638,7 +638,7 @@ def _sequence_mul(self: nbt, other):
             if other == 1:
                 return self
             t = self._alloc_temp()
-            t[:] = self
+            t[...] = self
             for _ in range(other - 1):
                 self += t
             return self
@@ -690,7 +690,7 @@ class nbt(FlareValue, NBTStringMethods):
         if addr is not None:
             self._parse_addr(addr)
             if self._value_to_set is not None:
-                self[:] = self._value_to_set
+                self[...] = self._value_to_set
 
     def _alloc_temp(self, prefix="#temp"):
         if isinstance(prefix, FlareValue):
@@ -758,10 +758,10 @@ class nbt(FlareValue, NBTStringMethods):
     def get_type(self, *, dest=None):
         nbt._generate_get_type_stdlib()
         temp = self._alloc_temp("#type_in")
-        temp[:] = self
+        temp[...] = self
         _runcmd(f"data modify storage __flare_stdlib__:nbt_get_type input set from {addr(temp)}")
         _runcmd("function __flare_stdlib__:nbt/get_type/init")
-        dest[:] = nbt(addr="storage __flare_stdlib__:nbt_get_type output")
+        dest[...] = nbt(addr="storage __flare_stdlib__:nbt_get_type output")
 
     def _check_math(self, func_name: str):
         numeric_types = {NBTType.Byte, NBTType.Short, NBTType.Int, NBTType.Long, NBTType.Float, NBTType.Double}
@@ -839,7 +839,7 @@ class nbt(FlareValue, NBTStringMethods):
                 _runcmd(f"data modify {base_addr} append value {{}}")
                 self._parse_addr(f"{ctx._current_namespace}:vars {varid}[-1]")
                 if self._value_to_set is not None:
-                    self[:] = self._value_to_set
+                    self[...] = self._value_to_set
                 return self
             else:
                 _runcmd(f"data modify {base_addr} append value {{}}")
@@ -853,7 +853,7 @@ class nbt(FlareValue, NBTStringMethods):
         if self._addr is None:
             self._parse_addr(ctx.get_nbt_var_addr(ctx._current_namespace, varid))
             if self._value_to_set is not None:
-                self[:] = self._value_to_set
+                self[...] = self._value_to_set
             return self
 
         dest = self._create_var(varid)
@@ -872,14 +872,14 @@ class nbt(FlareValue, NBTStringMethods):
         temp_len = score(addr=f"#for_len_{_id}")
 
         if is_str:
-            temp_len[:] = self.__len__()
+            temp_len[...] = self.__len__()
             if getattr(ctx, "_in_recursive_context", False):
                 _runcmd(f"data modify storage {ctx.args_storage} for_str_{_id} append value {{}}")
                 temp_arr = nbt(addr=f"storage {ctx.args_storage} for_str_{_id}[-1]", datatype=NBTType.String)
             else:
                 temp_arr = nbt(addr=f"flare:temp for_str_{_id}", datatype=NBTType.String)
 
-            temp_arr[:] = self
+            temp_arr[...] = self
             temp_var = temp_arr[0]
         else:
             elem_type = None
@@ -897,7 +897,7 @@ class nbt(FlareValue, NBTStringMethods):
                 temp_arr = nbt(addr=f"flare:temp for_arr_{_id}", datatype=self._type)
 
             temp_var = nbt(addr=f"{addr(temp_arr)}[0]", datatype=elem_type)
-            temp_arr[:] = self
+            temp_arr[...] = self
 
         func_name = ctx.get_generated_func_name("for")
 
@@ -912,7 +912,7 @@ class nbt(FlareValue, NBTStringMethods):
                 body_func(temp_var)
 
             if is_str:
-                temp_arr[:] = temp_arr[1:]
+                temp_arr[...] = temp_arr[1:]
                 temp_len -= 1
             else:
                 _runcmd(f"data remove {addr(temp_arr)}[0]")
@@ -942,7 +942,7 @@ class nbt(FlareValue, NBTStringMethods):
 
         if has_break:
             break_score = score(addr="#break")
-            break_score[:] = 0
+            break_score[...] = 0
 
         if _has_early_return(func_name):
             ret_temp_init = ctx.next_temp_score("ret")
@@ -1022,7 +1022,7 @@ class nbt(FlareValue, NBTStringMethods):
             super().__setattr__(name, value)
         else:
             target = getattr(self, name)
-            target[:] = value
+            target[...] = value
 
     def __getitem__(self, item):
         self._check_addr()
@@ -1144,7 +1144,7 @@ class nbt(FlareValue, NBTStringMethods):
             raise TypeError(f"Invalid NBT path index: {item}")
 
     def __setitem__(self, key: Any, value: Any):
-        if isinstance(key, slice) and key.start is None and key.stop is None and key.step is None:
+        if key is ...:
             self.__iset__(value)
             return
         target = self[key]
@@ -1183,7 +1183,7 @@ class nbt(FlareValue, NBTStringMethods):
         if self._addr is None:
             self._parse_addr(f"flare:temp t{ctx.next_temp_id()}")
             if self._value_to_set is not None:
-                self[:] = self._value_to_set
+                self[...] = self._value_to_set
 
     @classmethod
     def __class_getitem__(cls, nbt_type):
@@ -1541,7 +1541,7 @@ class nbt(FlareValue, NBTStringMethods):
         if not isinstance(dest, score):
             dest = ctx.next_temp_score("in_res", value=0)
         else:
-            dest[:] = 0
+            dest[...] = 0
 
         if self._type == NBTType.Compound:
             if isinstance(item, str):
@@ -1557,10 +1557,10 @@ class nbt(FlareValue, NBTStringMethods):
         from .builtins import flare_len
 
         temp = nbt(addr=f"flare:temp in_arr_{_id}", datatype=self._type)
-        temp[:] = self
+        temp[...] = self
 
         length = score(addr=f"#in_len_{_id}")
-        length[:] = flare_len(temp)
+        length[...] = flare_len(temp)
 
         def loop():
             _flare_if(lambda: temp[0] == item, lambda: dest.__iset__(1))
@@ -1579,7 +1579,7 @@ class nbt(FlareValue, NBTStringMethods):
         if self._type == NBTType.String:
             res = super().__in__(item)
             if dest is not None:
-                dest[:] = 0
+                dest[...] = 0
                 conds = _flatten_and(res)
                 if isinstance(dest, score):
                     _runcmd(f"execute {' '.join(conds)} run scoreboard players set {addr(dest)} 1")
@@ -1799,7 +1799,7 @@ class nbt(FlareValue, NBTStringMethods):
         return f'NBT[{self._type}](addr="{addr(self)}")'
 
     def __call__(self, *args, **kwargs):
-        self[:] = args[0]
+        self[...] = args[0]
         return self
 
     def append(self, other):
@@ -1994,25 +1994,25 @@ class nbt(FlareValue, NBTStringMethods):
         if self._type == NBTType.String:
             _id = ctx.next_temp_id()
             temp_str = nbt(addr=f"storage {ctx.temp_storage} rev_str_{_id}", datatype=NBTType.String)
-            temp_str[:] = self
+            temp_str[...] = self
 
-            dest[:] = ""
+            dest[...] = ""
 
             func_name = ctx.get_generated_func_name("rev_str")
 
             char_temp = nbt(addr=f"storage {ctx.temp_storage} rev_char_{_id}", datatype=NBTType.String)
 
             with ctx.push_context(func_name):
-                char_temp[:] = temp_str[0]
+                char_temp[...] = temp_str[0]
                 dest.prepend(char_temp)
-                temp_str[:] = temp_str[1:]
+                temp_str[...] = temp_str[1:]
 
                 l_op = temp_str.__len__()
                 temp_len = score(addr=f"#rev_len_{_id}")
                 if hasattr(l_op, "_compile_into"):
                     l_op._compile_into(temp_len)
                 else:
-                    temp_len[:] = l_op
+                    temp_len[...] = l_op
                 ScoreIfMatches(temp_len, (1, float("inf"))).then(lambda: _runcmd(f"function {func_name}"))
 
             l_op = temp_str.__len__()
@@ -2020,7 +2020,7 @@ class nbt(FlareValue, NBTStringMethods):
             if hasattr(l_op, "_compile_into"):
                 l_op._compile_into(temp_len)
             else:
-                temp_len[:] = l_op
+                temp_len[...] = l_op
             ScoreIfMatches(temp_len, (1, float("inf"))).then(lambda: _runcmd(f"function {func_name}"))
 
             return dest
@@ -2033,7 +2033,7 @@ class nbt(FlareValue, NBTStringMethods):
         _id = ctx.next_temp_id()
 
         temp_list = nbt(addr=f"storage {ctx.temp_storage} rev_lst_{_id}", datatype=self._type)
-        temp_list[:] = self
+        temp_list[...] = self
 
         _runcmd(f"data remove {addr(dest)}")
 
@@ -2048,7 +2048,7 @@ class nbt(FlareValue, NBTStringMethods):
             if hasattr(l_op, "_compile_into"):
                 l_op._compile_into(temp_len)
             else:
-                temp_len[:] = l_op
+                temp_len[...] = l_op
             ScoreIfMatches(temp_len, (1, float("inf"))).then(lambda: _runcmd(f"function {func_name}"))
 
         l_op = temp_list.__len__()
@@ -2056,7 +2056,7 @@ class nbt(FlareValue, NBTStringMethods):
         if hasattr(l_op, "_compile_into"):
             l_op._compile_into(temp_len)
         else:
-            temp_len[:] = l_op
+            temp_len[...] = l_op
         ScoreIfMatches(temp_len, (1, float("inf"))).then(lambda: _runcmd(f"function {func_name}"))
 
         return dest

@@ -75,7 +75,7 @@ class flare_range:
             is_neg = True
 
         i = score(0, addr=f"#range_i_{ctx.next_temp_id()}")
-        i[:] = start
+        i[...] = start
 
         def loop_body():
             body_func(i)
@@ -96,7 +96,7 @@ def flare_ord(s):
         return builtins.ord(s)
 
     def eval_ord(dest):
-        dest[:] = 0
+        dest[...] = 0
         _id = ctx.next_temp_id()
 
         _runcmd(f"data modify storage flare:temp ord_char_{_id} set from {addr(s)} 0 1")
@@ -129,9 +129,9 @@ def flare_bin(n):
     def eval_bin(dest):
         _id = ctx.next_temp_id()
         n_score = score(0, addr=f"#bin_n_{_id}")
-        n_score[:] = n
+        n_score[...] = n
 
-        dest[:] = ""
+        dest[...] = ""
         func_name = ctx.get_generated_func_name("bin")
 
         char_temp = nbt(addr=f"flare:temp bin_char_{_id}", datatype=NBTType.String)
@@ -152,7 +152,7 @@ def flare_bin(n):
 
         ScoreIfMatches(n_score, (1, inf)).then(lambda: _runcmd(f"function {func_name}"))
 
-        char_temp[:] = 0
+        char_temp[...] = 0
         dest.prepend(char_temp)
         return dest
 

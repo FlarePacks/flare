@@ -40,7 +40,7 @@ def _dispatch_eval(name, dest, *args):
             if hasattr(dest, "__iset__"):
                 dest.__iset__(res)
             else:
-                dest[:] = res
+                dest[...] = res
             return dest
 
         type_name = type(x).__name__
@@ -77,7 +77,7 @@ def _dispatch_eval(name, dest, *args):
                     if hasattr(out_var, "__iset__"):
                         out_var.__iset__(res)
                     else:
-                        out_var[:] = res
+                        out_var[...] = res
 
         memo = ctx.memoized_math[memo_key]
 
@@ -90,7 +90,7 @@ def _dispatch_eval(name, dest, *args):
                 if hasattr(in_var, "__iset__"):
                     in_var.__iset__(arg)
                 else:
-                    in_var[:] = arg
+                    in_var[...] = arg
 
         _runcmd(f"function {memo['func_path']}")
 
@@ -99,7 +99,7 @@ def _dispatch_eval(name, dest, *args):
         if hasattr(dest, "__iset__"):
             dest.__iset__(out_var)
         else:
-            dest[:] = out_var
+            dest[...] = out_var
 
         return dest
 
@@ -119,7 +119,7 @@ def min_(*args, **kwargs):
     var = next((x for x in search_args if isinstance(x, FlareValue)), None)
 
     def eval_min(dest, **_):
-        dest[:] = search_args[0]
+        dest[...] = search_args[0]
         for x in search_args[1:]:
             dest.__imin__(x)
         return dest
@@ -143,7 +143,7 @@ def max_(*args, **kwargs):
     var = next((x for x in search_args if isinstance(x, FlareValue)), None)
 
     def eval_max(dest, **_):
-        dest[:] = search_args[0]
+        dest[...] = search_args[0]
         for x in search_args[1:]:
             dest.__imax__(x)
         return dest

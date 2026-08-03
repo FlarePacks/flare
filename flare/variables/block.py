@@ -330,7 +330,7 @@ class block(FlareValue, Generic[T]):
     def get_id(self, *, dest=None):
         block._generate_get_name_stdlib()
         _runcmd(f"execute positioned {self.pos} run function __flare_stdlib__:block/get/blocks/root")
-        dest[:] = nbt(addr="__flare_stdlib__:block/get output.block")
+        dest[...] = nbt(addr="__flare_stdlib__:block/get output.block")
 
     @classmethod
     def _generate_to_item_stdlib(cls):
@@ -354,9 +354,9 @@ class block(FlareValue, Generic[T]):
     def to_item(cls, target_name, *, dest=None):
         cls._generate_to_item_stdlib()
 
-        nbt(addr="storage __flare_stdlib__:block_to_item target")[:] = target_name
+        nbt(addr="storage __flare_stdlib__:block_to_item target")[...] = target_name
         _runcmd("function __flare_stdlib__:block/to_item/init")
-        dest[:] = nbt(addr="__flare_stdlib__:block_to_item output")
+        dest[...] = nbt(addr="__flare_stdlib__:block_to_item output")
 
     @classmethod
     def _generate_place_stdlib(cls):
@@ -386,7 +386,7 @@ class block(FlareValue, Generic[T]):
         block._generate_place_stdlib()
 
         temp = nbt(addr="storage __flare_stdlib__:block_place target")
-        temp[:] = state
+        temp[...] = state
 
         _runcmd(f"execute positioned {self.pos} run function __flare_stdlib__:block/place/init")
 
@@ -448,7 +448,7 @@ class block(FlareValue, Generic[T]):
         elif ctype == "string":
             datatype = NBTType.String
 
-        dest[:] = nbt(addr="storage __flare_stdlib__:block_states target", datatype=datatype)
+        dest[...] = nbt(addr="storage __flare_stdlib__:block_states target", datatype=datatype)
 
     def is_biome(self, biome: str) -> "InlineCondition":
         from ..execute_modifiers import InlineCondition

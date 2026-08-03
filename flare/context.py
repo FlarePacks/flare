@@ -339,7 +339,7 @@ def runcommand(command: str, local_vars=None, global_vars=None, validation: str 
 
         for name, val in dynamic_macros:
             temp_nbt = nbt(addr=f"storage flare:macro {name}")
-            temp_nbt[:] = val
+            temp_nbt[...] = val
 
         with push_context(func_name):
             runcommand(command, validation=validation)
@@ -441,7 +441,7 @@ def _invoke_stdlib(func_name, generator, inputs=None, outputs=None, with_=None):
             generator(std_inputs, std_outputs)
 
     for k, v in inputs.items():
-        std_inputs[k][:] = v
+        std_inputs[k][...] = v
     with_cmd = ""
     if isinstance(with_, nbt):
         with_cmd = f" with {addr(with_)}"
@@ -449,7 +449,7 @@ def _invoke_stdlib(func_name, generator, inputs=None, outputs=None, with_=None):
         with_cmd = f" {with_}"
     _runcmd(f"function {func_name}{with_cmd}")
     for k, v in outputs.items():
-        v[:] = std_outputs[k]
+        v[...] = std_outputs[k]
 
 
 from .variables.score import score

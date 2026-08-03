@@ -27,4 +27,4 @@ class Objective:
         s = self[item]
         if getattr(s, "_addr", None) == getattr(value, "_addr", None):
             return
-        s[:] = value
+        s[...] = value

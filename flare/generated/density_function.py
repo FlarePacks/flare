@@ -5,7 +5,7 @@ from flare.generated.data_component import *
 class Clamp:
     def __init__(
             self,
-            input: Optional[Union['DensityFunction', Any]] = None,
+            input: Optional[Union[Union['DensityFunction', 'DensityFunctionRef'], Any]] = None,
             min: Optional[Union['NoiseRange', Any]] = None,
             max: Optional[Union['NoiseRange', Any]] = None,
             **kwargs

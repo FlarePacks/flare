@@ -36,7 +36,7 @@ def raycast() -> int:
     self.add_tag("we_temp_player")
     with summon("marker"):
         for i, v in enumerate("xyz"):
-            temp_self.score(f"we_out_{v}")[:] = self.Pos[i]
+            temp_self.score(f"we_out_{v}")[...] = self.Pos[i]
         self.kill()
     self.remove_tag("we_temp_player")
     return 0
@@ -105,7 +105,7 @@ def raycast_eyes():
 def on_wand_punch():
     raycast_eyes()
     for i in range(3):
-        pos1[i][:] = vec_out[i]
+        pos1[i][...] = vec_out[i]
     self.actionbar("Pos1 set to: X:", pos1.x, "Y:", pos1.y, "Z:", pos1.z, color="gray")
     render_player_bound()
 
@@ -114,7 +114,7 @@ def on_wand_punch():
 def on_wand_use():
     raycast_eyes()
     for i in range(3):
-        pos2[i][:] = vec_out[i]
+        pos2[i][...] = vec_out[i]
     self.actionbar("Pos2 set to: X:", pos2.x, "Y:", pos2.y, "Z:", pos2.z, color="gray")
     render_player_bound()
 
