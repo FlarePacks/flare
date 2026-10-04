@@ -85,12 +85,15 @@ class ScoreIfMatches(ScoreIf):
         self.rng = rng
 
     def __str__(self):
+        if hasattr(self.t, "_check_addr"):
+            self.t._check_addr()
         if isinstance(self.rng, str):
             st = self.rng
         else:
             a, b = self.rng
-            if not isinf(a): a = int(a * self.t._multiplier)
-            if not isinf(b): b = int(b * self.t._multiplier)
+            mult = getattr(self.t, "_multiplier", 1.0)
+            if not isinf(a): a = int(round(a / mult))
+            if not isinf(b): b = int(round(b / mult))
             st = f"{a}..{b}"
             if a == b:
                 st = f"{a}"
@@ -112,12 +115,15 @@ class ScoreUnlessMatches(ScoreIf):
         self.rng = rng
 
     def __str__(self):
+        if hasattr(self.t, "_check_addr"):
+            self.t._check_addr()
         if isinstance(self.rng, str):
             st = self.rng
         else:
             a, b = self.rng
-            if not isinf(a): a = int(a * self.t._multiplier)
-            if not isinf(b): b = int(b * self.t._multiplier)
+            mult = getattr(self.t, "_multiplier", 1.0)
+            if not isinf(a): a = int(round(a / mult))
+            if not isinf(b): b = int(round(b / mult))
             st = f"{a}..{b}"
             if a == b:
                 st = f"{a}"

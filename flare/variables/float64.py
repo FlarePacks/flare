@@ -35,8 +35,42 @@ class float64(FlareValue):
     def _alloc_temp(self, prefix="#temp"):
         return type(self)(addr=f"{prefix}_{ctx.next_temp_id()}")
 
+    _lattice_rank = 50
+
     def _type_priority(self):
         return 200.0
+
+    def to_str(self):
+        from .score import score
+        s = self.__implicit__((score,))
+        return s.to_str()
+
+    def __implicit__(self, target_types):
+        self._check_addr()
+        for target in target_types:
+            t_name = getattr(target, "__name__", "")
+            if t_name in ("score", "fixed", "_PrecisionScore"):
+                from .float64 import float64_to_score
+                from .score import score
+                dest = score()
+                float64_to_score(self, dest=dest)
+                return dest
+            elif t_name == "float32":
+                from .float32 import float32, score_to_float32
+                from .float64 import float64_to_score
+                from .score import score
+                s = score()
+                float64_to_score(self, dest=s)
+                dest = float32()
+                score_to_float32(s, dest=dest)
+                return dest
+            elif t_name in ("nbt", "nbtdouble", "nbtfloat", "_TypedNBT"):
+                from .score import score
+                s = self.__implicit__((score,))
+                return s.__implicit__((target,))
+            elif t_name in ("nbtstr",):
+                return self.to_str()
+        return super().__implicit__(target_types)
 
     def _create_var(self, varid: str):
         return type(self)(addr=ctx.get_score_var_addr(varid))
@@ -1166,6 +1200,7 @@ class float64(FlareValue):
         pass
 
     def __repr__(self):
+        self._check_addr()
         return f"float64(exp={self._exp}, sign={self._sign}, mant_lo={self._mant_lo}, mant_hi={self._mant_hi})"
 
 

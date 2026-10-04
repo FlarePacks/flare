@@ -168,7 +168,8 @@ class ExecuteChain:
                     chain_prefix.append(f"store result score {addr(dest)}")
                 elif hasattr(dest, "_path"):
                     dtype = dest._type_name.lower() if getattr(dest, "_type", None) else "double"
-                    chain_prefix.append(f"store result storage {dest._target} {dest._path} {dtype} 1.0")
+                    target_type = getattr(dest, "_target_type", "storage")
+                    chain_prefix.append(f"store result {target_type} {dest._target} {dest._path} {dtype} 1.0")
 
             exec_str = " ".join(chain_prefix)
 
@@ -316,7 +317,8 @@ class StoreExecuteChain(ExecuteChain):
         from .validator.core import validate_command, FlareCommandValidationError
 
         store_type = "success" if self._is_success else "result"
-        frag = f"store {store_type} storage {self._target._target} {self._target._path} {self._datatype} {self._multiplier}"
+        target_type = getattr(self._target, "_target_type", "storage")
+        frag = f"store {store_type} {target_type} {self._target._target} {self._target._path} {self._datatype} {self._multiplier}"
 
         val_level = ctx.validation_level
         if val_level != "none":

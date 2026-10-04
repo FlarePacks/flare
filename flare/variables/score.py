@@ -8,7 +8,7 @@ from typing import Any
 
 from .core import is_lazy, addr, FlareValue
 from .. import context as ctx
-from ..context import _runcmd, temp_obj, constant_obj, constants
+from ..context import _runcmd, temp_obj, constant_obj, constants, vars_obj
 
 INT32_LIMIT = (2 ** 31) - 1
 
@@ -60,6 +60,8 @@ class score(FlareValue):
             else:
                 self._name = ""
                 self._objective = ""
+
+    _lattice_rank = 10
 
     def _type_priority(self):
         return -self._multiplier
@@ -165,7 +167,55 @@ class score(FlareValue):
             if self._multiplier != other._multiplier:
                 self *= other._multiplier / self._multiplier
             return self
+        if type(other).__name__ == "bigscore":
+            dest = other.__implicit__((score,))
+            return self.__iset__(dest)
         return self._try_binary("__iset__", "=", other, (float, int, score, nbt))
+
+    def to_str(self):
+        from .nbt import nbt
+        from ..types import NBTType
+        self._check_addr()
+        _id = ctx.next_temp_id()
+        dest = nbt(addr=f"flare:temp s2str_{_id}", datatype=NBTType.String)
+        int_holder = f"flare:temp num_{_id}"
+        _runcmd(f"execute store result storage {int_holder} val int 1 run scoreboard players get {addr(self)}")
+        _runcmd(f"data modify {addr(dest)} set value \"\"")
+        _runcmd(f"data modify {addr(dest)} set string storage {int_holder} val")
+        return dest
+
+    def __implicit__(self, target_types):
+        self._check_addr()
+        from ..types import NBTType
+        for target in target_types:
+            t_name = getattr(target, "__name__", "")
+            if t_name in ("fixed", "_PrecisionScore"):
+                dest = target()
+                dest[...] = self
+                return dest
+            elif t_name == "bigscore":
+                from .bigscore import bigscore
+                dest = bigscore()
+                dest[...] = self
+                return dest
+            elif t_name == "float32":
+                from .float32 import float32, score_to_float32
+                dest = float32()
+                score_to_float32(self, dest=dest)
+                return dest
+            elif t_name == "float64":
+                from .float64 import float64, score_to_float64
+                dest = float64()
+                score_to_float64(self, dest=dest)
+                return dest
+            elif t_name in ("nbt", "_TypedNBT", "nbtint", "nbtdouble", "nbtfloat", "nbtbyte", "nbtshort", "nbtlong"):
+                from .nbt import nbt
+                dest = target() if callable(target) else nbt()
+                dest[...] = self
+                return dest
+            elif t_name in ("nbtstr",) or (hasattr(target, "_type") and getattr(target, "_type") == NBTType.String):
+                return self.to_str()
+        return super().__implicit__(target_types)
 
     def __round__(self, ndigits=None):
         if ndigits is not None:
@@ -202,7 +252,7 @@ class score(FlareValue):
         if m == 1:
             return self
         temp = self.__icopy__(f"#math_{ctx.next_temp_id()}")
-        m_addr = addr(score(m))
+        m_addr = addr(getscore(m))
         _runcmd(f"execute if score {addr(temp)} matches 0.. run scoreboard players add {addr(temp)} {m - 1}")
         _runcmd(f"execute if score {addr(temp)} matches 0.. run scoreboard players operation {addr(temp)} /= {m_addr}")
         _runcmd(f"execute if score {addr(temp)} matches 0.. run scoreboard players operation {addr(temp)} *= {m_addr}")
@@ -392,8 +442,9 @@ class score(FlareValue):
         if isinstance(other, nbt):
             if other._type is not None and not other.is_number():
                 raise TypeError("Cannot add non-numeric NBT to score")
-            _runcmd(f"execute store result score {addr(temp)} run data get {addr(other)}" + (
-                f" {self._multiplier}" if self._multiplier != 1.0 else ""))
+            scale = 1.0 / self._multiplier
+            scale_str = f" {scale:g}" if scale != 1.0 else ""
+            _runcmd(f"execute store result score {addr(temp)} run data get {addr(other)}{scale_str}")
             _runcmd(f"scoreboard players operation {addr(self)} += {addr(temp)}")
             return self
         if isinstance(other, score):
@@ -421,8 +472,9 @@ class score(FlareValue):
         if isinstance(other, nbt):
             if other._type is not None and not other.is_number():
                 raise TypeError("Cannot subtract non-numeric NBT from score")
-            _runcmd(f"execute store result score {addr(temp)} run data get {addr(other)}" + (
-                f" {self._multiplier}" if self._multiplier != 1.0 else ""))
+            scale = 1.0 / self._multiplier
+            scale_str = f" {scale:g}" if scale != 1.0 else ""
+            _runcmd(f"execute store result score {addr(temp)} run data get {addr(other)}{scale_str}")
             _runcmd(f"scoreboard players operation {addr(self)} -= {addr(temp)}")
             return self
         if isinstance(other, score):
@@ -505,8 +557,9 @@ class score(FlareValue):
         if isinstance(other, nbt):
             if other._type is not None and not other.is_number():
                 raise TypeError("Cannot modulo score with non-numeric NBT")
-            _runcmd(f"execute store result score {addr(temp)} run data get {addr(other)}" + (
-                f" {self._multiplier}" if self._multiplier != 1.0 else ""))
+            scale = 1.0 / self._multiplier
+            scale_str = f" {scale:g}" if scale != 1.0 else ""
+            _runcmd(f"execute store result score {addr(temp)} run data get {addr(other)}{scale_str}")
             _runcmd(f"scoreboard players operation {addr(self)} %= {addr(temp)}")
             return self
         if isinstance(other, score):
@@ -534,8 +587,9 @@ class score(FlareValue):
         if isinstance(other, nbt):
             if other._type is not None and not other.is_number():
                 raise TypeError("Cannot compare score with non-numeric NBT")
-            _runcmd(f"execute store result score {addr(temp)} run data get {addr(other)}" + (
-                f" {self._multiplier}" if self._multiplier != 1.0 else ""))
+            scale = 1.0 / self._multiplier
+            scale_str = f" {scale:g}" if scale != 1.0 else ""
+            _runcmd(f"execute store result score {addr(temp)} run data get {addr(other)}{scale_str}")
             _runcmd(f"scoreboard players operation {addr(self)} > {addr(temp)}")
             return self
         if isinstance(other, score):
@@ -562,8 +616,9 @@ class score(FlareValue):
         if isinstance(other, nbt):
             if other._type is not None and not other.is_number():
                 raise TypeError("Cannot compare score with non-numeric NBT")
-            _runcmd(f"execute store result score {addr(temp)} run data get {addr(other)}" + (
-                f" {self._multiplier}" if self._multiplier != 1.0 else ""))
+            scale = 1.0 / self._multiplier
+            scale_str = f" {scale:g}" if scale != 1.0 else ""
+            _runcmd(f"execute store result score {addr(temp)} run data get {addr(other)}{scale_str}")
             _runcmd(f"scoreboard players operation {addr(self)} < {addr(temp)}")
             return self
         if isinstance(other, score):
@@ -588,11 +643,14 @@ class score(FlareValue):
         if isinstance(other, nbt):
             if other._type is not None and not other.is_number():
                 raise TypeError("Cannot swap score with non-numeric NBT")
-            _runcmd(f"execute store result score {addr(temp)} run data get {addr(other)}" + (
-                f" {self._multiplier}" if self._multiplier != 1.0 else ""))
+            scale = 1.0 / self._multiplier
+            scale_str = f" {scale:g}" if scale != 1.0 else ""
+            _runcmd(f"execute store result score {addr(temp)} run data get {addr(other)}{scale_str}")
             datatype = other._type_name.lower() if other._type else "double"
+            target_scale = self._multiplier
+            target_scale_str = f"{target_scale:g}" if target_scale % 1 != 0 else str(int(target_scale))
             _runcmd(
-                f"execute store result storage {other._target} {other._path} {datatype} {1 / self._multiplier} run scoreboard players get {addr(self)}")
+                f"execute store result storage {other._target} {other._path} {datatype} {target_scale_str} run scoreboard players get {addr(self)}")
             _runcmd(f"scoreboard players operation {addr(self)} = {addr(temp)}")
             return self
         if isinstance(other, score):
@@ -621,8 +679,7 @@ class score(FlareValue):
 
         if isinstance(other, (int, float)):
             val = int(math.floor(other / self._multiplier)) + 1
-            adjusted_val = val / self._multiplier if self._multiplier != 0 else val
-            return ScoreIfMatches(self, (adjusted_val, inf))
+            return ScoreIfMatches(self, (val * self._multiplier, inf))
         return super().__gt__(other)
 
     def __ge__(self, other) -> Any:
@@ -630,8 +687,7 @@ class score(FlareValue):
 
         if isinstance(other, (int, float)):
             val = int(math.ceil(other / self._multiplier))
-            adjusted_val = val / self._multiplier if self._multiplier != 0 else val
-            return ScoreIfMatches(self, (adjusted_val, inf))
+            return ScoreIfMatches(self, (val * self._multiplier, inf))
         return super().__ge__(other)
 
     def __lt__(self, other) -> Any:
@@ -639,8 +695,7 @@ class score(FlareValue):
 
         if isinstance(other, (int, float)):
             val = int(math.ceil(other / self._multiplier)) - 1
-            adjusted_val = val / self._multiplier if self._multiplier != 0 else val
-            return ScoreIfMatches(self, (-inf, adjusted_val))
+            return ScoreIfMatches(self, (-inf, val * self._multiplier))
         return super().__lt__(other)
 
     def __le__(self, other) -> Any:
@@ -648,8 +703,7 @@ class score(FlareValue):
 
         if isinstance(other, (int, float)):
             val = int(math.floor(other / self._multiplier))
-            adjusted_val = val / self._multiplier if self._multiplier != 0 else val
-            return ScoreIfMatches(self, (-inf, adjusted_val))
+            return ScoreIfMatches(self, (-inf, val * self._multiplier))
         return super().__le__(other)
 
     def __eq__(self, other) -> Any:
@@ -657,8 +711,7 @@ class score(FlareValue):
 
         if isinstance(other, (int, float)):
             val = int(round(other / self._multiplier))
-            adjusted_val = val / self._multiplier if self._multiplier != 0 else val
-            return ScoreIfMatches(self, adjusted_val)
+            return ScoreIfMatches(self, val * self._multiplier)
         return super().__eq__(other)
 
     def __ne__(self, other) -> Any:
@@ -666,8 +719,7 @@ class score(FlareValue):
 
         if isinstance(other, (int, float)):
             val = int(round(other / self._multiplier))
-            adjusted_val = val / self._multiplier if self._multiplier != 0 else val
-            return ScoreUnlessMatches(self, adjusted_val)
+            return ScoreUnlessMatches(self, val * self._multiplier)
         return super().__ne__(other)
 
     def reset(self):
@@ -675,6 +727,7 @@ class score(FlareValue):
 
 
 class fixed(score):
+    _lattice_rank = 20
     def __init__(self, value: int | float | None = None, *, addr: str | True | None = None, multiplier: float = 1e-4):
         super().__init__(value, addr=addr, multiplier=multiplier)
 

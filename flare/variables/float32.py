@@ -46,8 +46,40 @@ class float32(FlareValue):
             if self._value_to_set is not None:
                 self[...] = self._value_to_set
 
+    _lattice_rank = 40
+
     def _type_priority(self):
         return 100.0
+
+    def to_str(self):
+        from .score import score
+        s = self.__implicit__((score,))
+        return s.to_str()
+
+    def __implicit__(self, target_types):
+        self._check_addr()
+        for target in target_types:
+            t_name = getattr(target, "__name__", "")
+            if t_name in ("score", "fixed", "_PrecisionScore"):
+                from .score import score
+                dest = score()
+                float32_to_score(self, dest=dest)
+                return dest
+            elif t_name == "float64":
+                from .float64 import float64, score_to_float64
+                from .score import score
+                s = score()
+                float32_to_score(self, dest=s)
+                dest = float64()
+                score_to_float64(s, dest=dest)
+                return dest
+            elif t_name in ("nbt", "nbtdouble", "nbtfloat", "_TypedNBT"):
+                from .score import score
+                s = self.__implicit__((score,))
+                return s.__implicit__((target,))
+            elif t_name in ("nbtstr",):
+                return self.to_str()
+        return super().__implicit__(target_types)
 
     def _create_var(self, varid: str):
         return float32(addr=ctx.get_score_var_addr(varid))
@@ -1079,6 +1111,7 @@ class float32(FlareValue):
         return comps
 
     def __repr__(self):
+        self._check_addr()
         return f"float32(exp={self._exp}, sign={self._sign}, mant={self._mant})"
 
 

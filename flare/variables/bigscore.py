@@ -21,6 +21,7 @@ class bigscore(FlareValue):
     _multiplier = 1.0
     _base = BASE
     _implements_set = (int, float, score)
+    _lattice_rank = 30
 
     def __init__(self, value: int | float | None = None, *, addr: str | None = None, size: int | None = None,
                  multiplier: float | None = None):
@@ -128,6 +129,35 @@ class bigscore(FlareValue):
             return self
 
         return self._try_binary("__iset__", "=", other, (float, int, bigscore, score))
+
+    def __implicit__(self, target_types):
+        self._check_addr()
+        for target in target_types:
+            t_name = getattr(target, "__name__", "")
+            if t_name in ("score", "_PrecisionScore"):
+                dest = score()
+                dest[...] = self.get_limb(0)
+                if self.size > 1:
+                    dest += self.get_limb(1) * self._base
+                return dest
+            elif t_name == "float32":
+                from .float32 import float32
+                s = self.__implicit__((score,))
+                return s.__implicit__((float32,))
+            elif t_name == "float64":
+                from .float64 import float64
+                s = self.__implicit__((score,))
+                return s.__implicit__((float64,))
+            elif t_name in ("nbt", "nbtlong", "_TypedNBT"):
+                from .nbt import nbt
+                dest = target() if callable(target) else nbt()
+                s = self.__implicit__((score,))
+                dest[...] = s
+                return dest
+            elif t_name in ("nbtstr",):
+                s = self.__implicit__((score,))
+                return s.to_str()
+        return super().__implicit__(target_types)
 
     def __iadd__(self, other):
         rem, val, carry, borrow, mul = _get_temps()

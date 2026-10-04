@@ -1303,6 +1303,10 @@ class nbt(FlareValue, NBTStringMethods):
                 return self.__iset__(temp)
             other._compile_into(self)
             return self
+        if hasattr(other, "__print__") and not isinstance(other, FlareValue):
+            other = other.__print__()
+            if self._type == NBTType.String and not isinstance(other, str):
+                other = json.dumps(other)
         if isinstance(other, (score, nbt)):
             other._check_addr()
         if isinstance(other, (int, float)):
@@ -1329,6 +1333,10 @@ class nbt(FlareValue, NBTStringMethods):
             _runcmd(f"data modify {addr(self)} set value {other}{suffix}")
             return self
         if isinstance(other, score):
+            if self._type == NBTType.String:
+                s_str = other.to_str()
+                _runcmd(f"data modify {addr(self)} set from {addr(s_str)}")
+                return self
             if self._type is not None and not self.is_number():
                 type_name = self._type_name.lower()
                 raise TypeError(f"Cannot set {type_name} with score")
@@ -1517,6 +1525,10 @@ class nbt(FlareValue, NBTStringMethods):
                 scale_str = "1.0" if self.is_floaty() else "1"
                 _runcmd(f"execute store result {addr(self)} {store_type} {scale_str} run data get {addr(other)}")
                 return self
+            if self._type == NBTType.String and (other.is_number() or other._type is None):
+                _runcmd(f"data modify {addr(self)} set value \"\"")
+                _runcmd(f"data modify {addr(self)} set string {addr(other)}")
+                return self
             if self._type is None or other._type is None:
                 if addr(self) != addr(other):
                     _runcmd(_emit_data_modify_from(addr(self), "set", addr(other)))
@@ -1532,6 +1544,54 @@ class nbt(FlareValue, NBTStringMethods):
         else:
             raise UnsupportedOperandError(self, "=", other)
         return self._try_binary("__iset__", "=", other, exp_type)
+
+    def to_str(self):
+        from ..context import _runcmd, next_temp_id
+        from ..types import NBTType
+        self._check_addr()
+        if self._type == NBTType.String:
+            return self
+        _id = next_temp_id()
+        dest = nbt(addr=f"flare:temp n2str_{_id}", datatype=NBTType.String)
+        _runcmd(f"data modify {addr(dest)} set value \"\"")
+        _runcmd(f"data modify {addr(dest)} set string {addr(self)}")
+        return dest
+
+    def __implicit__(self, target_types):
+        self._check_addr()
+        from ..types import NBTType
+        for target in target_types:
+            t_name = getattr(target, "__name__", "")
+            if t_name in ("score", "_PrecisionScore"):
+                from .score import score
+                dest = score()
+                dest[...] = self
+                return dest
+            elif t_name == "fixed":
+                from .score import fixed
+                dest = fixed()
+                dest[...] = self
+                return dest
+            elif t_name == "bigscore":
+                from .bigscore import bigscore
+                dest = bigscore()
+                dest[...] = self
+                return dest
+            elif t_name == "float32":
+                from .float32 import float32
+                s = self.__implicit__((score,))
+                return s.__implicit__((float32,))
+            elif t_name == "float64":
+                from .float64 import float64
+                s = self.__implicit__((score,))
+                return s.__implicit__((float64,))
+            elif t_name in ("nbtstr",) or (hasattr(target, "_type") and getattr(target, "_type") == NBTType.String):
+                return self.to_str()
+            elif hasattr(target, "_type") and getattr(target, "_type") is not None:
+                dest = target()
+                dest[...] = self
+                return dest
+        return super().__implicit__(target_types)
 
     def __contains__(self, item):
         return self.__in__(item)

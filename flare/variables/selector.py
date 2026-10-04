@@ -121,8 +121,30 @@ class selector(Generic[T]):
 
         attr.__iset__(value)
 
+    @property
+    def mainhand(self):
+        from .item import ItemSlot
+        return ItemSlot(self._target_str, "SelectedItem", slot_id="weapon.mainhand")
+
+    @property
+    def offhand(self):
+        from .item import ItemSlot
+        return ItemSlot(self._target_str, "Inventory[{Slot: -106b}]", slot_id="weapon.offhand")
+
+    @property
+    def inventory(self):
+        from .item import InventoryAccessor
+        return InventoryAccessor(self._target_str)
+
     def __getitem__(self, item):
-        return self.__getattr__(str(item))
+        item_str = str(item)
+        if item_str == "mainhand":
+            return self.mainhand
+        if item_str == "offhand":
+            return self.offhand
+        if item_str == "inventory":
+            return self.inventory
+        return self.__getattr__(item_str)
 
     def __with__(self, body_func):
         self._as().__with__(body_func)

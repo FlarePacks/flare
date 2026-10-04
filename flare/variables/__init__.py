@@ -1,11 +1,11 @@
 from .bigscore import bigscore, bigfixed
 from .block import block
-from .builtins import fail, flare_len as len, flare_range as range, flare_ord as ord, flare_bin as bin
+from .builtins import fail, flare_len as len, flare_range as range, flare_ord as ord, flare_bin as bin, parse_int, parse_float
 from .complex import complex
 from .core import UnsupportedOperandError, BinaryOp, UnaryOp, macro, ref, lazy_apply, addr
 from .float32 import float32
 from .float64 import float64
-from .item import item
+from .item import item, ItemSlot, ItemComponentsProxy, InventoryAccessor
 from .nbt import nbt, struct
 from .objective import Objective
 from .score import score, fixed, getscore, INT32_LIMIT
@@ -36,8 +36,9 @@ float64._implements_set = (int, float, score, nbt, float32, float64)
 nbt._implements_set = (int, float, str, list, dict, score, nbt, float32, float64)
 bigscore._implements_set = (int, float, score, bigscore)
 
-__all__ = ["bigscore", "bigfixed", "fail", "len", "range", "ord", "bin", "complex", "UnsupportedOperandError",
+__all__ = ["bigscore", "bigfixed", "fail", "len", "range", "ord", "bin", "parse_int", "parse_float", "complex", "UnsupportedOperandError",
            "BinaryOp", "UnaryOp", "macro", "ref", "float32", "float64", "nbt", "struct", "snbt", "Objective", "score",
            "fixed", "getscore", "INT32_LIMIT", "selector", "storage", "nbtbyte", "nbtbool", "nbtshort", "nbtint",
            "nbtlong", "nbtfloat", "nbtdouble", "nbtstr", "nbtlist", "nbtcompound", "nbtbytearray", "nbtintarray",
-           "nbtlongarray", "block", "item"]
+           "nbtlongarray", "block", "item", "ItemSlot", "ItemComponentsProxy", "InventoryAccessor"]
+

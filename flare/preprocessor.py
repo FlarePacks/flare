@@ -15,10 +15,11 @@ class CallGraphAnalyzer(ast.NodeVisitor):
         self.nostack_funcs = set()
 
     def visit_FunctionDef(self, node):
-        is_exported = any(
-            isinstance(dec, ast.Name) and dec.id in ("export", "macro", "event", "tick", "load", "tag") or isinstance(
-                dec, ast.Call) and getattr(dec.func, "id", "") in ("export", "macro", "event", "tick", "load", "tag")
-            for dec in node.decorator_list)
+        def _check_dec(dec):
+            d_id = dec.id if isinstance(dec, ast.Name) else getattr(getattr(dec, "func", None), "id", "")
+            return d_id in ("export", "macro", "event", "tick", "load", "tag") or d_id.endswith("_event")
+
+        is_exported = any(_check_dec(dec) for dec in node.decorator_list)
         is_nostack = any(
             isinstance(dec, ast.Name) and dec.id == "nostack" or isinstance(dec, ast.Call) and getattr(dec.func, "id",
                                                                                                        "") == "nostack"
@@ -69,10 +70,11 @@ class FlareTransformer(ast.NodeTransformer):
         return f"__flare_{self.counter}"
 
     def visit_FunctionDef(self, node):
-        is_exported = any(
-            isinstance(dec, ast.Name) and dec.id in ("export", "macro", "event", "tick", "load", "tag") or isinstance(
-                dec, ast.Call) and getattr(dec.func, "id", "") in ("export", "macro", "event", "tick", "load", "tag")
-            for dec in node.decorator_list)
+        def _check_dec(dec):
+            d_id = dec.id if isinstance(dec, ast.Name) else getattr(getattr(dec, "func", None), "id", "")
+            return d_id in ("export", "macro", "event", "tick", "load", "tag") or d_id.endswith("_event")
+
+        is_exported = any(_check_dec(dec) for dec in node.decorator_list)
 
         is_generated = node.name.startswith("__flare_")
         prev_in_flare = self.in_flare_func
@@ -509,6 +511,35 @@ class FlareTransformer(ast.NodeTransformer):
                 return expr
         return node
 
+    def visit_JoinedStr(self, node):
+        self.generic_visit(node)
+        has_formatted = any(isinstance(v, ast.FormattedValue) for v in node.values)
+        if not has_formatted:
+            return node
+
+        template_parts = []
+        args = []
+        for v in node.values:
+            if isinstance(v, ast.Constant):
+                s = str(v.value).replace("{", "{{").replace("}", "}}")
+                template_parts.append(s)
+            elif isinstance(v, ast.FormattedValue):
+                idx = len(args)
+                template_parts.append(f"{{{idx}}}")
+                args.append(v.value)
+            else:
+                template_parts.append("{}")
+                args.append(v)
+
+        template_str = "".join(template_parts)
+        call_node = ast.Call(
+            func=ast.Name(id="_flare_format", ctx=ast.Load()),
+            args=[ast.Constant(value=template_str)] + args,
+            keywords=[]
+        )
+        ast.copy_location(call_node, node)
+        return call_node
+
     def visit_Call(self, node):
         self.generic_visit(node)
         if isinstance(node.func, ast.Name) and node.func.id == "success" and node.args:
@@ -521,6 +552,8 @@ class FlareTransformer(ast.NodeTransformer):
 
     def visit_Return(self, node):
         self.generic_visit(node)
+        if not self.in_flare_func:
+            return node
 
         value = node.value if node.value is not None else ast.Constant(value=None)
 
@@ -1069,7 +1102,7 @@ def preprocess_minecraft_commands(source: str) -> str:
                         break
 
                 has_tilde_or_caret = any(t.string in ("~", "^") for t in collected_tokens)
-                if len(coords) >= 2 and (has_tilde_or_caret or first_tok.string == "b"):
+                if len(coords) >= 2 and (has_tilde_or_caret or is_b_coord):
                     out_tokens.append((tokenize.NAME, "block"))
                     out_tokens.append((tokenize.OP, "("))
                     out_tokens.append((tokenize.NAME, "ref"))
@@ -1635,10 +1668,12 @@ def preprocess_minecraft_commands(source: str) -> str:
 
 
 HEADER_IMPORTS = ("from flare import *\n"
+                  "from flare.variables import nbt\n"
+                  "from flare.variables.string import _flare_format\n"
                   "from flare import context as ctx\n"
                   "from flare.command_parser import interpolate_command\n"
                   "from flare import _flare_print as print\n"
-                  "from flare.variables.builtins import flare_range as range, flare_ord as ord, flare_bin as bin, flare_len as len\n"
+                  "from flare.variables.builtins import flare_range as range, flare_ord as ord, flare_bin as bin, flare_len as len, parse_int, parse_float\n"
                   "from flare.variables.core import lazy_apply\n"
                   "from flare.variables.regex import re_patch as re\n")
 

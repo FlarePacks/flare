@@ -30,7 +30,10 @@ def lazify(temp: Any = "#temp", datatype=None, self: Any = True, copy=None):
                         t = call_args[0]._alloc_temp()
                         call_args[0]._compile_into(t)
                         call_args[0] = t
-                    return func(*call_args, dest=dest, **merged_kwargs)
+                    try:
+                        return func(*call_args, dest=dest, **merged_kwargs)
+                    except ctx.FlareReturnException:
+                        return dest
 
                 def alloc_temp():
                     target_type = datatype(obj_or_arg) if callable(datatype) else datatype
@@ -64,7 +67,10 @@ def lazify(temp: Any = "#temp", datatype=None, self: Any = True, copy=None):
             else:
                 def eval_func(dest, **eval_kwargs):
                     merged_kwargs = {**kwargs, **eval_kwargs}
-                    return func(*args, dest=dest, **merged_kwargs)
+                    try:
+                        return func(*args, dest=dest, **merged_kwargs)
+                    except ctx.FlareReturnException:
+                        return dest
 
                 def alloc_temp():
                     nonlocal ctx
@@ -99,6 +105,59 @@ def lazify(temp: Any = "#temp", datatype=None, self: Any = True, copy=None):
 
         return wrapper
 
+    return decorator
+
+
+def get_lattice_rank(val_or_cls) -> int:
+    if val_or_cls is None:
+        return -999999
+    if isinstance(val_or_cls, (BinaryOp, UnaryOp, LazyOp)):
+        val_or_cls = val_or_cls._best_leaf()
+    # 1. Instance-level rank override (e.g. dynamic precision / bit-width)
+    if not isinstance(val_or_cls, type) and hasattr(val_or_cls, "_lattice_rank"):
+        rank = getattr(val_or_cls, "_lattice_rank")
+        return rank() if callable(rank) else rank
+    # 2. Class-level rank attribute or method
+    cls = val_or_cls if isinstance(val_or_cls, type) else type(val_or_cls)
+    if hasattr(cls, "_lattice_rank"):
+        rank = getattr(cls, "_lattice_rank")
+        if not callable(rank):
+            return rank
+        elif isinstance(val_or_cls, type):
+            try:
+                return rank(cls)
+            except TypeError:
+                pass
+    # 3. Built-in type defaults
+    builtin_ranks = {
+        "score": 10,
+        "_PrecisionScore": 15,
+        "fixed": 20,
+        "bigscore": 30,
+        "bigfixed": 35,
+        "float32": 40,
+        "float64": 50,
+        "complex": 60,
+    }
+    if hasattr(val_or_cls, "_type") and getattr(val_or_cls, "_type") is not None:
+        from ..types import NBTType
+        t = val_or_cls._type
+        if t in (NBTType.Byte, NBTType.Short, NBTType.Int):
+            return 10
+        elif t == NBTType.Long:
+            return 30
+        elif t == NBTType.Float:
+            return 40
+        elif t == NBTType.Double:
+            return 50
+    return builtin_ranks.get(getattr(cls, "__name__", ""), 0)
+
+
+def lattice_type(rank: int):
+    """Decorator to declare the lattice rank of a custom FlareValue class."""
+    def decorator(cls):
+        cls._lattice_rank = rank
+        return cls
     return decorator
 
 
@@ -257,8 +316,33 @@ class FlareValue(ABC, metaclass=FlareClassMeta):
         raise TypeError(
             "Flare variables cannot be evaluated as Python booleans at compile-time. Use expand(condition) for dynamic conditionals or check if a built-in Python function is attempting native comparisons.")
 
+    def cast(self, target_type):
+        if isinstance(self, target_type):
+            return self
+        if hasattr(self, "__implicit__"):
+            try:
+                res = self.__implicit__((target_type,))
+                if res is not NotImplemented and res is not None:
+                    return res
+            except NotImplementedError:
+                pass
+        if callable(target_type):
+            try:
+                return target_type(self)
+            except Exception:
+                pass
+        raise TypeError(f"Cannot cast {type(self).__name__} to {target_type}")
+
     def __implicit__(self, target_types):
-        raise NotImplementedError()
+        for target in target_types:
+            if isinstance(self, target):
+                return self
+            if callable(target):
+                try:
+                    return target(self)
+                except Exception:
+                    pass
+        raise NotImplementedError(f"Cannot implicitly convert {type(self).__name__} to any of {target_types}")
 
     def _try_binary(self, fn, op, other, possibilities=None):
         from .. import context as ctx
@@ -302,11 +386,7 @@ class BinaryOp(FlareValue):
 
     def _best_leaf(self):
         def get_priority(leaf):
-            if hasattr(leaf, "_type_priority"):
-                return leaf._type_priority()
-            if isinstance(leaf, FlareValue):
-                return 0
-            return -999999
+            return get_lattice_rank(leaf)
 
         def traverse(node):
             if isinstance(node, BinaryOp):
@@ -344,13 +424,7 @@ class BinaryOp(FlareValue):
         if self.op in ("add", "mul"):
 
             def get_priority(node):
-                if hasattr(node, "_best_leaf"):
-                    node = node._best_leaf()
-                if hasattr(node, "_type_priority"):
-                    return node._type_priority()
-                if isinstance(node, FlareValue):
-                    return 0
-                return -999999
+                return get_lattice_rank(node)
 
             if get_priority(right_node) > get_priority(left_node):
                 left_node, right_node = right_node, left_node
@@ -430,11 +504,7 @@ class UnaryOp(FlareValue):
 
     def _best_leaf(self):
         def get_priority(leaf):
-            if hasattr(leaf, "_type_priority"):
-                return leaf._type_priority()
-            if isinstance(leaf, FlareValue):
-                return 0
-            return -999999
+            return get_lattice_rank(leaf)
 
         def traverse(node):
             if isinstance(node, BinaryOp):

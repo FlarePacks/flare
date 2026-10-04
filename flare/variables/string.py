@@ -1442,3 +1442,55 @@ class NBTStringMethods:
         ScoreIfMatches(temp_len, (1, inf)).then(lambda: _runcmd(f"function {func_name}"))
 
         return dest
+
+
+def _flare_format(template: str, *args):
+    from .core import FlareValue
+    has_flare = any(isinstance(a, FlareValue) for a in args)
+    if not has_flare:
+        try:
+            return template.format(*args)
+        except Exception:
+            pass
+
+    from .. import context as ctx
+    from ..context import _runcmd
+    from .score import score
+    from .nbt import nbt
+    from ..types import NBTType
+    import json
+
+    _id = ctx.next_temp_id()
+    dest = nbt(addr=f"flare:temp fmt_res_{_id}", datatype=NBTType.String)
+
+    macro_template = template
+    for i, a in enumerate(args):
+        param_name = f"arg_{i}"
+        macro_template = macro_template.replace(f"{{{i}}}", f"$({param_name})")
+        if isinstance(a, score):
+            a._check_addr()
+            _runcmd(f"execute store result storage flare:macro {param_name} int 1 run scoreboard players get {addr(a)}")
+        elif isinstance(a, nbt):
+            a._check_addr()
+            _runcmd(f"data modify storage flare:macro {param_name} set from {addr(a)}")
+        elif isinstance(a, FlareValue):
+            s = a.to_str()
+            _runcmd(f"data modify storage flare:macro {param_name} set from {addr(s)}")
+        else:
+            if isinstance(a, str):
+                _runcmd(f"data modify storage flare:macro {param_name} set value {json.dumps(a)}")
+            else:
+                _runcmd(f"data modify storage flare:macro {param_name} set value {a}")
+
+    macro_func_name = ctx.get_generated_func_name("format")
+    prev_current = ctx.current_file
+    try:
+        ctx.current_file = macro_func_name
+        ctx.files[macro_func_name] = [
+            f'$data modify {addr(dest)} set value "{macro_template}"'
+        ]
+    finally:
+        ctx.current_file = prev_current
+
+    _runcmd(f"function {macro_func_name} with storage flare:macro")
+    return dest

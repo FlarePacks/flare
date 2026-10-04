@@ -138,25 +138,167 @@ def flare_bin(n):
 
         def loop():
             nonlocal n_score
-            modulo = n_score % 2
+            modulo = score(addr=f"#bin_mod_{_id}")
+            modulo[...] = n_score % 2
             ScoreIfMatches(modulo, 0).then(lambda: char_temp.__iset__("0"))
             ScoreIfMatches(modulo, 1).then(lambda: char_temp.__iset__("1"))
 
             dest.prepend(char_temp)
 
-            n_score //= 2
+            n_score /= 2
             ScoreIfMatches(n_score, (1, inf)).then(lambda: _runcmd(f"function {func_name}"))
 
         with ctx.push_context(func_name):
             loop()
 
+        ScoreIfMatches(n_score, 0).then(lambda: dest.__iset__("0"))
         ScoreIfMatches(n_score, (1, inf)).then(lambda: _runcmd(f"function {func_name}"))
-
-        char_temp[...] = 0
-        dest.prepend(char_temp)
         return dest
 
     def alloc_temp():
-        return nbt(addr=f"#bin_out_{ctx.next_temp_id()}", datatype=NBTType.String)
+        return nbt(addr=f"flare:temp bin_out_{ctx.next_temp_id()}", datatype=NBTType.String)
 
     return LazyOp(n, eval_bin, alloc_temp)
+
+
+def parse_int(s):
+    from .core import FlareValue, LazyOp
+    from .. import context as ctx
+    from ..context import _runcmd
+    from .score import score
+    from .nbt import nbt
+    from ..types import NBTType
+    from ..control_flow import ScoreIfMatches
+
+    if not isinstance(s, FlareValue):
+        return builtins.int(s)
+
+    def eval_parse_int(dest):
+        _id = ctx.next_temp_id()
+        temp_str = nbt(addr=f"flare:temp parse_curr_{_id}", datatype=NBTType.String)
+        temp_str[...] = s
+
+        str_len = score(addr=f"#parse_len_{_id}")
+        _runcmd(f"execute store result score {addr(str_len)} run data get storage flare:temp parse_curr_{_id}")
+
+        is_neg = score(0, addr=f"#parse_neg_{_id}")
+        digit_val = score(addr=f"#parse_dig_{_id}")
+        dest[...] = 0
+
+        func_name = ctx.get_generated_func_name("parse_int_loop")
+
+        def loop():
+            _runcmd(f"data modify storage flare:temp parse_char_{_id} set string storage flare:temp parse_curr_{_id} 0 1")
+            _runcmd(f"data modify storage flare:temp parse_curr_{_id} set string storage flare:temp parse_curr_{_id} 1")
+            str_len.__isub__(1)
+
+            _runcmd(f'execute if data storage flare:temp {{"parse_char_{_id}": "-"}} run scoreboard players set {addr(is_neg)} 1')
+
+            digit_val[...] = -1
+            for d in range(10):
+                _runcmd(f'execute if data storage flare:temp {{"parse_char_{_id}": "{d}"}} run scoreboard players set {addr(digit_val)} {d}')
+
+            ScoreIfMatches(digit_val, (0, inf)).then(lambda: dest.__imul__(10))
+            ScoreIfMatches(digit_val, (0, inf)).then(lambda: dest.__iadd__(digit_val))
+
+            ScoreIfMatches(str_len, (1, inf)).then(lambda: _runcmd(f"function {func_name}"))
+
+        with ctx.push_context(func_name):
+            loop()
+
+        ScoreIfMatches(str_len, (1, inf)).then(lambda: _runcmd(f"function {func_name}"))
+        ScoreIfMatches(is_neg, 1).then(lambda: dest.__imul__(-1))
+        return dest
+
+    def alloc_temp():
+        return score(addr=f"#parse_int_out_{ctx.next_temp_id()}")
+
+    return LazyOp(s, eval_parse_int, alloc_temp)
+
+
+def parse_float(s, precision: int = 4):
+    from .core import FlareValue, LazyOp
+    from .. import context as ctx
+    from ..context import _runcmd
+    from .score import score, fixed
+    from .nbt import nbt
+    from ..types import NBTType
+    from ..control_flow import ScoreIfMatches
+
+    if not isinstance(s, FlareValue):
+        return builtins.float(s)
+
+    multiplier = 10 ** -precision
+
+    def eval_parse_float(dest):
+        _id = ctx.next_temp_id()
+        temp_str = nbt(addr=f"flare:temp parse_curr_{_id}", datatype=NBTType.String)
+        temp_str[...] = s
+
+        str_len = score(addr=f"#parse_len_{_id}")
+        _runcmd(f"execute store result score {addr(str_len)} run data get storage flare:temp parse_curr_{_id}")
+
+        is_neg = score(0, addr=f"#parse_neg_{_id}")
+        seen_dot = score(0, addr=f"#parse_dot_{_id}")
+        frac_left = score(precision, addr=f"#parse_frac_{_id}")
+        digit_val = score(addr=f"#parse_dig_{_id}")
+        should_accumulate = score(0, addr=f"#parse_acc_{_id}")
+
+        dest[...] = 0
+
+        func_name = ctx.get_generated_func_name("parse_float_loop")
+
+        def loop():
+            _runcmd(f"data modify storage flare:temp parse_char_{_id} set string storage flare:temp parse_curr_{_id} 0 1")
+            _runcmd(f"data modify storage flare:temp parse_curr_{_id} set string storage flare:temp parse_curr_{_id} 1")
+            str_len.__isub__(1)
+
+            _runcmd(f'execute if data storage flare:temp {{"parse_char_{_id}": "-"}} run scoreboard players set {addr(is_neg)} 1')
+            _runcmd(f'execute if data storage flare:temp {{"parse_char_{_id}": "."}} run scoreboard players set {addr(seen_dot)} 1')
+
+            digit_val[...] = -1
+            for d in range(10):
+                _runcmd(f'execute if data storage flare:temp {{"parse_char_{_id}": "{d}"}} run scoreboard players set {addr(digit_val)} {d}')
+
+            ScoreIfMatches(digit_val, (0, inf)).then(lambda: (
+                ScoreIfMatches(seen_dot, 0).then(lambda: should_accumulate.__iset__(1)),
+                ScoreIfMatches(seen_dot, 1).then(lambda: (
+                    ScoreIfMatches(frac_left, (1, inf)).then(lambda: (
+                        should_accumulate.__iset__(1),
+                        frac_left.__isub__(1)
+                    ))
+                )),
+                ScoreIfMatches(should_accumulate, 1).then(lambda: (
+                    dest.__imul__(10),
+                    dest.__iadd__(digit_val),
+                    should_accumulate.__iset__(0)
+                ))
+            ))
+
+            ScoreIfMatches(str_len, (1, inf)).then(lambda: _runcmd(f"function {func_name}"))
+
+        with ctx.push_context(func_name):
+            loop()
+
+        ScoreIfMatches(str_len, (1, inf)).then(lambda: _runcmd(f"function {func_name}"))
+
+        # Padding loop for remaining fractional digits
+        pad_func = ctx.get_generated_func_name("parse_pad_loop")
+
+        def pad_loop():
+            dest.__imul__(10)
+            frac_left.__isub__(1)
+            ScoreIfMatches(frac_left, (1, inf)).then(lambda: _runcmd(f"function {pad_func}"))
+
+        with ctx.push_context(pad_func):
+            pad_loop()
+
+        ScoreIfMatches(frac_left, (1, inf)).then(lambda: _runcmd(f"function {pad_func}"))
+        ScoreIfMatches(is_neg, 1).then(lambda: dest.__imul__(-1))
+        return dest
+
+    def alloc_temp():
+        return fixed(addr=f"#parse_float_out_{ctx.next_temp_id()}", multiplier=multiplier)
+
+    return LazyOp(s, eval_parse_float, alloc_temp)
+
