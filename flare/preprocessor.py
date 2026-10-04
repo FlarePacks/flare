@@ -735,6 +735,8 @@ def preprocess_minecraft_commands(source: str) -> str:
             if cmd.startswith("/"):
                 cmd = cmd[1:]
 
+            closing_map = {"{": "}", "[": "]", "(": ")"}
+            bracket_stack = []
             in_string = False
             escape = False
             cmd_lines = []
@@ -742,37 +744,56 @@ def preprocess_minecraft_commands(source: str) -> str:
             start_i = i
 
             while i < len(lines):
-                current_line = lines[i]
-                cmd_lines.append(current_line)
+                current_line = cmd if i == start_i else lines[i]
+                line_code = []
 
-                for char in current_line:
+                for char_idx, char in enumerate(current_line):
                     if escape:
                         escape = False
+                        line_code.append(char)
                         continue
                     if char == "\\":
                         escape = True
+                        line_code.append(char)
                         continue
                     if char in ('"', "'"):
                         if in_string == char:
                             in_string = False
                         elif not in_string:
                             in_string = char
+                        line_code.append(char)
                         continue
 
                     if not in_string:
+                        if char == "#":
+                            rest = current_line[char_idx + 1:]
+                            if not rest or rest[0] in (" ", "\t", "\n", "\r") or bool(bracket_stack):
+                                break
                         if char in bracket_counts:
                             bracket_counts[char] += 1
+                            bracket_stack.append(char)
                         elif char in bracket_matches:
                             opener = bracket_matches[char]
                             if bracket_counts[opener] > 0:
                                 bracket_counts[opener] -= 1
+                            if bracket_stack and bracket_stack[-1] == opener:
+                                bracket_stack.pop()
+
+                    line_code.append(char)
+
+                cleaned = "".join(line_code).strip()
+                if cleaned:
+                    cmd_lines.append(cleaned)
 
                 if sum(bracket_counts.values()) == 0:
                     break
                 i += 1
 
-            cmd_lines[0] = cmd
-            full_cmd = " ".join([c.strip() for c in cmd_lines])
+            if bracket_stack:
+                auto_closers = "".join(closing_map[b] for b in reversed(bracket_stack))
+                cmd_lines.append(auto_closers)
+
+            full_cmd = " ".join(cmd_lines)
 
             if '"""' in full_cmd:
                 lines[start_i] = f"{indent}runcommand('''{full_cmd}''', locals(), globals())"

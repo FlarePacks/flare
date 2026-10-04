@@ -16,6 +16,40 @@ TOKEN_REGEX = re.compile(r'(?P<FSTRING>f\"(?:\\\\.|[^\\"])*\"|f\'(?:\\\\.|[^\\\'
                          r'(?P<SYMBOL>[~^@{}\[\]:,=.!#$%&*+\-/<>?|\\`]+)|'
                          r'(?P<WHITESPACE>\s+)')
 
+_BRACKET_STRING_RE = re.compile(
+    r'(?:[fFrR]?(?:"""(?:\\.|[^\\])*?"""|\'\'\'(?:\\.|[^\\])*?\'\'\'|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'))'
+)
+
+
+def _prepare_bracket_eval_expr(expr: str) -> str:
+    tokens = []
+    last = 0
+    for m in _BRACKET_STRING_RE.finditer(expr):
+        non_str = expr[last:m.start()]
+        non_str = re.sub(r'#.*$', '', non_str, flags=re.MULTILINE)
+        non_str = re.sub(r'\$\(([a-zA-Z_][a-zA-Z0-9_]*)\)', r'\1', non_str)
+        non_str = re.sub(r'\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}', r'\1', non_str)
+        non_str = re.sub(r'\$([a-zA-Z_][a-zA-Z0-9_]*)', r'\1', non_str)
+        non_str = re.sub(r'(?<=[{\s,])([a-zA-Z_][a-zA-Z0-9_\-.]*)\s*:', r'"\1":', non_str)
+        non_str = re.sub(r'\btrue\b', 'True', non_str)
+        non_str = re.sub(r'\bfalse\b', 'False', non_str)
+        non_str = re.sub(r'\bnull\b', 'None', non_str)
+        tokens.append(non_str)
+        tokens.append(m.group(0))
+        last = m.end()
+
+    non_str = expr[last:]
+    non_str = re.sub(r'#.*$', '', non_str, flags=re.MULTILINE)
+    non_str = re.sub(r'\$\(([a-zA-Z_][a-zA-Z0-9_]*)\)', r'\1', non_str)
+    non_str = re.sub(r'\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}', r'\1', non_str)
+    non_str = re.sub(r'\$([a-zA-Z_][a-zA-Z0-9_]*)', r'\1', non_str)
+    non_str = re.sub(r'(?<=[{\s,])([a-zA-Z_][a-zA-Z0-9_\-.]*)\s*:', r'"\1":', non_str)
+    non_str = re.sub(r'\btrue\b', 'True', non_str)
+    non_str = re.sub(r'\bfalse\b', 'False', non_str)
+    non_str = re.sub(r'\bnull\b', 'None', non_str)
+    tokens.append(non_str)
+    return "".join(tokens)
+
 
 def interpolate_command(command: str, local_vars: dict, global_vars: dict, dynamic_macros: list = None,
                         is_snbt: bool = False) -> str:
@@ -65,8 +99,9 @@ def interpolate_command(command: str, local_vars: dict, global_vars: dict, dynam
         elif isinstance(val, (int, float)):
             return str(val)
         elif isinstance(val, str):
-            if val.startswith("$(") and val.endswith(")"):
-                return val
+            if "$(" in val:
+                _macro_substituted = True
+                _any_var_resolved = True
             return json.dumps(val)
         elif hasattr(val, "addr") and type(val).__name__ != "_Storage":
             _any_var_resolved = True
@@ -194,9 +229,7 @@ def interpolate_command(command: str, local_vars: dict, global_vars: dict, dynam
             if j > start and sum(bracket_counts.values()) == 0:
                 expr = command[start:j]
                 try:
-                    eval_expr = re.sub(r'\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}', r'\1', expr)
-                    eval_expr = re.sub(r'\$([a-zA-Z_][a-zA-Z0-9_]*)', r'\1', eval_expr)
-                    eval_expr = re.sub(r'(?<=[{\s,])([a-zA-Z_][a-zA-Z0-9_\-.]*)\s*:', r'"\1":', eval_expr)
+                    eval_expr = _prepare_bracket_eval_expr(expr)
                     val = eval(eval_expr, global_vars, local_vars)
                     if isinstance(val, (dict, list)) or (
                             hasattr(val, "_value_to_set") and isinstance(val._value_to_set, dict)):

@@ -376,7 +376,7 @@ def facing(target_or_pos: Union[str, tuple, list, selector], *args) -> ExecuteCh
 
 
 def anchored(anchor: str) -> ExecuteChain:
-    return ExecuteChain().anchor(anchor)
+    return ExecuteChain().anchored(anchor)
 
 
 def rotated(rot: Union[str, tuple, list, selector], *args) -> ExecuteChain:

@@ -13,6 +13,7 @@ import threading
 import time
 import traceback
 from pathlib import Path
+from typing import Any
 
 import mcemu
 
@@ -76,6 +77,7 @@ def _build_datapack_inner(file_path: str, cli_overrides: dict | None = None, bee
     from flare.utils import minecraft_version_to_pack_format
 
     p = Path(file_path).parent
+    cli_overrides = cli_overrides or {}
     json_path = p / "flare.json"
 
     from flare.config import load_config

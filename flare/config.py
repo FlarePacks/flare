@@ -26,6 +26,11 @@ class FlareConfig:
     no_cache: bool = False
 
     def validate_and_normalize(self):
+        if hasattr(self, "pack_format") and isinstance(self.pack_format, (str, float)):
+            try:
+                self.pack_format = int(float(self.pack_format))
+            except (ValueError, TypeError):
+                pass
         for field_name, (default_val, valid_set) in VALIDATION_FIELDS.items():
             val = getattr(self, field_name)
             if val not in valid_set:

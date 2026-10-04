@@ -17,6 +17,7 @@ return_targets = {}
 recursive_locals = {}
 _scope_stacks = []
 _regex_cache = {}
+_current_scope = None
 
 
 class DynamicVar:
@@ -140,7 +141,7 @@ def get_generated_func_name(prefix: str, namespace: str = None) -> str:
 
 
 def reset_context():
-    global current_file, _current_namespace, _temp_id, _func_id, _objective_offset, _constant_offset, validation_level, system_command_validation, minecraft_version, nbt_schema_missing, type_narrowing, _in_recursive_context, _logical_func, memoized_math
+    global current_file, _current_namespace, _temp_id, _func_id, _objective_offset, _constant_offset, validation_level, system_command_validation, minecraft_version, nbt_schema_missing, type_narrowing, _in_recursive_context, _logical_func, memoized_math, _current_scope
     files.clear()
     json_files.clear()
     resourcepack_textures.clear()
@@ -166,6 +167,7 @@ def reset_context():
     _regex_cache.clear()
     _pending_exports.clear()
     _pending_tags.clear()
+    _current_scope = None
 
 
 def evaluate_pending_exports():
@@ -324,6 +326,12 @@ def combine_execute(prefix: str, cmd: str) -> str:
 
 def runcommand(command: str, local_vars=None, global_vars=None, validation: str | None = None):
     dynamic_macros = []
+
+    if _current_scope is not None:
+        effective_locals = dict(_current_scope)
+        if local_vars is not None:
+            effective_locals.update(local_vars)
+        local_vars = effective_locals
 
     if "$(" in command and not command.startswith("$"):
         command = "$" + command
@@ -507,6 +515,29 @@ def export(func=None, *, name=None, append=False, returns=None):
         func_name = f"{_current_namespace}:{actual_name}"
     if func_name in files and not append:
         raise ValueError(f"Function {func_name} already exists. Use @export(append=True) to append.")
+
+    captured_scope = {}
+    if _current_scope:
+        captured_scope.update(_current_scope)
+    try:
+        f = sys._getframe(1)
+        while f and f.f_code.co_filename == __file__:
+            f = f.f_back
+        curr = f
+        while curr:
+            for k, v in curr.f_locals.items():
+                if k not in captured_scope:
+                    captured_scope[k] = v
+            curr = curr.f_back
+    except Exception:
+        pass
+
+    if hasattr(func, "__code__") and func.__code__.co_freevars and getattr(func, "__closure__", None):
+        for freevar, cell in zip(func.__code__.co_freevars, func.__closure__):
+            try:
+                captured_scope[freevar] = cell.cell_contents
+            except ValueError:
+                pass
 
     is_recursive = func.__name__ in _recursive_functions
     sig = inspect.signature(func)
@@ -739,7 +770,7 @@ def export(func=None, *, name=None, append=False, returns=None):
     proxy = ProxyFunction()
 
     def _evaluate():
-        global _in_recursive_context, _logical_func
+        global _in_recursive_context, _logical_func, _current_scope
 
         prev_recursive_inner = _in_recursive_context
         _in_recursive_context = is_recursive
@@ -747,14 +778,19 @@ def export(func=None, *, name=None, append=False, returns=None):
         prev_logical_inner = _logical_func
         _logical_func = func_name
 
-        with push_context(func_name):
-            try:
-                func(**kwargs)
-            except FlareReturnException:
-                pass
+        prev_scope = _current_scope
+        _current_scope = captured_scope
 
-        _in_recursive_context = prev_recursive_inner
-        _logical_func = prev_logical_inner
+        try:
+            with push_context(func_name):
+                try:
+                    func(**kwargs)
+                except FlareReturnException:
+                    pass
+        finally:
+            _in_recursive_context = prev_recursive_inner
+            _logical_func = prev_logical_inner
+            _current_scope = prev_scope
 
         if return_types[func_name] == "UNKNOWN":
             if has_returns.get(func_name, False):
