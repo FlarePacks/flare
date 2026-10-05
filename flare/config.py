@@ -24,6 +24,7 @@ class FlareConfig:
     description: str = "A Flare datapack"
     out_dir: Optional[str] = None
     no_cache: bool = False
+    optimize: bool = True
 
     def validate_and_normalize(self):
         if hasattr(self, "pack_format") and isinstance(self.pack_format, (str, float)):
@@ -44,6 +45,7 @@ class FlareConfig:
         ctx.type_narrowing = self.type_narrowing
         ctx.nbt_schema_missing = self.nbt_schema_missing
         ctx.minecraft_version = self.minecraft_version
+        ctx.optimize = self.optimize
         ctx.config = self.to_dict()
 
     def update(self, overrides: Dict[str, Any]):
@@ -56,7 +58,7 @@ class FlareConfig:
         return {"validation_level": self.validation_level, "system_command_validation": self.system_command_validation,
             "type_narrowing": self.type_narrowing, "nbt_schema_missing": self.nbt_schema_missing,
             "minecraft_version": self.minecraft_version, "namespace": self.namespace, "pack_format": self.pack_format,
-            "description": self.description, "no_cache": self.no_cache, }
+            "description": self.description, "no_cache": self.no_cache, "optimize": self.optimize}
 
 
 def load_config(raw_dict: Optional[Dict[str, Any]] = None, overrides: Optional[Dict[str, Any]] = None) -> FlareConfig:

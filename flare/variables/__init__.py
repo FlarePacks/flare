@@ -11,7 +11,10 @@ from .objective import Objective
 from .score import score, fixed, getscore, INT32_LIMIT
 from .selector import selector
 from .snbt import snbt, _snbt_array
-from .storage import _Storage
+from .storage import _Storage, storage_scope
+from .vec3 import vec3
+from .state import state, StateEnum
+from .bossbar import Bossbar
 from ..types import byte, boolean, short, long, double, array, compound
 
 storage = _Storage()
@@ -38,7 +41,7 @@ bigscore._implements_set = (int, float, score, bigscore)
 
 __all__ = ["bigscore", "bigfixed", "fail", "len", "range", "ord", "bin", "parse_int", "parse_float", "complex", "UnsupportedOperandError",
            "BinaryOp", "UnaryOp", "macro", "ref", "float32", "float64", "nbt", "struct", "snbt", "Objective", "score",
-           "fixed", "getscore", "INT32_LIMIT", "selector", "storage", "nbtbyte", "nbtbool", "nbtshort", "nbtint",
+           "fixed", "getscore", "INT32_LIMIT", "selector", "storage", "storage_scope", "nbtbyte", "nbtbool", "nbtshort", "nbtint",
            "nbtlong", "nbtfloat", "nbtdouble", "nbtstr", "nbtlist", "nbtcompound", "nbtbytearray", "nbtintarray",
-           "nbtlongarray", "block", "item", "ItemSlot", "ItemComponentsProxy", "InventoryAccessor"]
+           "nbtlongarray", "block", "item", "ItemSlot", "ItemComponentsProxy", "InventoryAccessor", "vec3", "state", "StateEnum", "Bossbar"]
 

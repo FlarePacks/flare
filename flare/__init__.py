@@ -29,16 +29,17 @@ from .variables import score, nbt, fixed, ref, getscore, storage, nbtbyte, nbtbo
     nbtdouble, nbtstr, nbtlist, nbtcompound, nbtbytearray, nbtintarray, nbtlongarray, selector, bigscore, bigfixed, \
     float64, float32, complex, macro, struct, compound, fail, Objective, block, item, ItemSlot, ItemComponentsProxy, \
     InventoryAccessor, snbt, _snbt_array, len, range, \
-    ord, bin, parse_int, parse_float, lazy_apply, addr
+    ord, bin, parse_int, parse_float, lazy_apply, addr, vec3, state, StateEnum, Bossbar, storage_scope
 from .variables.core import Function
 from .variables.regex import re_patch as re
+from .raycast import raycast
 from . import flrand
 
 true = True
 false = False
 
 __all__ = ["round_", "floor", "ceil", "namespace", "export", "tag", "tick", "load", "score", "nbt", "fixed", "ref",
-           "getscore", "storage", "_flare_print", "dbg", "nbtbyte", "nbtbool", "nbtshort", "nbtint", "nbtlong",
+           "getscore", "storage", "storage_scope", "_flare_print", "dbg", "nbtbyte", "nbtbool", "nbtshort", "nbtint", "nbtlong",
            "nbtfloat", "nbtdouble", "nbtstr", "nbtlist", "nbtcompound", "nbtbytearray", "nbtintarray", "nbtlongarray",
            "selector", "_as", "at", "positioned", "align", "facing", "anchored", "rotated", "dimension", "applyon",
            "on", "summon", "store", "if_", "unless", "if_block", "unless_block", "ExecuteChain", "StoreExecuteChain",
@@ -54,7 +55,7 @@ __all__ = ["round_", "floor", "ceil", "namespace", "export", "tag", "tick", "loa
            "_flare_in", "_flare_notin", "_flare_enter_scope", "_flare_exit_scope", "_flare_alone",
            "interpolate_command", "FlareTexture", "texture", "add_texture", "edit_texture", "get_texture", "re",
            "lazy_apply", "Objective", "addr", "get_nbt_var_addr", "get_score_var_addr", "set_nbt_var_addr_formatter",
-           "set_score_var_addr_formatter", "flrand"]
+           "set_score_var_addr_formatter", "flrand", "vec3", "state", "StateEnum", "raycast", "Bossbar"]
 
 from .resources import __all__ as _dd_all
 from .generated import events as _events

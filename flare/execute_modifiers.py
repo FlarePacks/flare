@@ -63,6 +63,8 @@ class ExecuteChain:
     def positioned(self, pos: Union[str, tuple, list, selector]) -> ExecuteChain:
         if isinstance(pos, selector) or (isinstance(pos, str) and pos.startswith("@")):
             return self._add(f"positioned as {pos}")
+        if hasattr(pos, "to_coords"):
+            return self._add(f"positioned {pos.to_coords()}")
         if isinstance(pos, (tuple, list)):
             pos = " ".join(str(p) for p in pos)
         return self._add(f"positioned {pos}")
@@ -73,6 +75,8 @@ class ExecuteChain:
     def facing(self, target_or_pos: Union[str, tuple, list, selector]) -> ExecuteChain:
         if isinstance(target_or_pos, selector) or (isinstance(target_or_pos, str) and target_or_pos.startswith("@")):
             return self._add(f"facing entity {target_or_pos}")
+        if hasattr(target_or_pos, "to_coords"):
+            return self._add(f"facing {target_or_pos.to_coords()}")
         if isinstance(target_or_pos, (tuple, list)):
             target_or_pos = " ".join(str(p) for p in target_or_pos)
         return self._add(f"facing {target_or_pos}")

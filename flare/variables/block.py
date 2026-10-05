@@ -243,6 +243,8 @@ class block(FlareValue, Generic[T]):
             cmd += f" {mode}"
         _runcmd(cmd)
 
+    set = setblock
+
     def destroy(self, name: str = "air"):
         self.setblock(name, mode="destroy")
 

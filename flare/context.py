@@ -75,6 +75,7 @@ system_command_validation = "none"
 minecraft_version = "1.20.4"
 nbt_schema_missing = "error"
 type_narrowing = "warning"
+optimize = True
 
 _nbt_var_addr_formatter = None
 _score_var_addr_formatter = None
@@ -141,7 +142,7 @@ def get_generated_func_name(prefix: str, namespace: str = None) -> str:
 
 
 def reset_context():
-    global current_file, _current_namespace, _temp_id, _func_id, _objective_offset, _constant_offset, validation_level, system_command_validation, minecraft_version, nbt_schema_missing, type_narrowing, _in_recursive_context, _logical_func, memoized_math, _current_scope
+    global current_file, _current_namespace, _temp_id, _func_id, _objective_offset, _constant_offset, validation_level, system_command_validation, minecraft_version, nbt_schema_missing, type_narrowing, _in_recursive_context, _logical_func, memoized_math, _current_scope, optimize
     files.clear()
     json_files.clear()
     resourcepack_textures.clear()
@@ -168,6 +169,7 @@ def reset_context():
     _pending_exports.clear()
     _pending_tags.clear()
     _current_scope = None
+    optimize = True
 
 
 def evaluate_pending_exports():
@@ -200,6 +202,11 @@ def evaluate_pending_exports():
     while _pending_exports:
         eval_fn = _pending_exports.pop(0)
         eval_fn()
+
+    if optimize:
+        from .optimizer import optimize_commands
+        for k in list(files.keys()):
+            files[k] = optimize_commands(files[k])
 
 
 def ensure_objective(obj: str, obj_type: str = "dummy", display="", add: bool = True):
@@ -374,6 +381,20 @@ def _runcmd(command: str, validation: str | None = None):
                 raise e
             elif val_level == "warning":
                 print(f"[Flare Compiler Warning] {e}")
+
+    if optimize:
+        from .optimizer import is_identity_move, is_identity_arithmetic, is_dead_store_pair
+        cmd_stripped = command.strip()
+        if is_identity_move(cmd_stripped) or is_identity_arithmetic(cmd_stripped):
+            return
+
+        target_list = files.get(current_file, [])
+        while target_list:
+            prev_cmd = target_list[-1].strip()
+            if is_dead_store_pair(prev_cmd, cmd_stripped):
+                target_list.pop()
+            else:
+                break
 
     files[current_file].append(command)
 
@@ -807,29 +828,37 @@ def export(func=None, *, name=None, append=False, returns=None):
     return proxy
 
 
-def tag(name: str, replace: bool = False):
+def tag(*names: str, replace: bool = False):
     def wrapper(func):
-        if func.__class__.__name__ == "ProxyFunction":
-            func_name = str(func)
-
-            if ":" in name:
-                ns, path = name.split(":", 1)
-                key = f"{ns}:tags/functions/{path}.json"
+        flat_names = []
+        for n in names:
+            if isinstance(n, (list, tuple, set)):
+                flat_names.extend(n)
             else:
-                key = f"{_current_namespace}:tags/functions/{name}.json"
+                flat_names.append(n)
 
-            if key in json_files:
-                existing = json_files[key]
-                if "values" not in existing:
-                    existing["values"] = []
-                if func_name not in existing["values"]:
-                    existing["values"].append(func_name)
-                if replace:
-                    existing["replace"] = True
+        for name in flat_names:
+            if func.__class__.__name__ == "ProxyFunction":
+                func_name = str(func)
+
+                if ":" in name:
+                    ns, path = name.split(":", 1)
+                    key = f"{ns}:tags/functions/{path}.json"
+                else:
+                    key = f"{_current_namespace}:tags/functions/{name}.json"
+
+                if key in json_files:
+                    existing = json_files[key]
+                    if "values" not in existing:
+                        existing["values"] = []
+                    if func_name not in existing["values"]:
+                        existing["values"].append(func_name)
+                    if replace:
+                        existing["replace"] = True
+                else:
+                    json_files[key] = {"replace": replace, "values": [func_name]}
             else:
-                json_files[key] = {"replace": replace, "values": [func_name]}
-        else:
-            _pending_tags.append((func, name, replace))
+                _pending_tags.append((func, name, replace))
 
         return func
 

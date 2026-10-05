@@ -35,6 +35,57 @@ class _PrintableSelector:
         return {"selector": self._target_str, "separator": sep_comp}
 
 
+class _EntityEffect:
+    def __init__(self, target_str: str):
+        self._target_str = target_str
+
+    def give(self, effect: str, duration: typing.Union[int, str] = 30, amplifier: int = 0, show_particles: bool = True):
+        hide = "false" if show_particles else "true"
+        _runcmd(f"effect give {self._target_str} {effect} {duration} {amplifier} {hide}")
+
+    def clear(self, effect: typing.Optional[str] = None):
+        if effect is None:
+            _runcmd(f"effect clear {self._target_str}")
+        else:
+            _runcmd(f"effect clear {self._target_str} {effect}")
+
+
+class _EntityXP:
+    def __init__(self, target_str: str):
+        self._target_str = target_str
+
+    def add(self, amount: typing.Any, unit: str = "points"):
+        _runcmd(f"experience add {self._target_str} {amount} {unit}")
+
+    def add_levels(self, levels: typing.Any):
+        self.add(levels, unit="levels")
+
+    def set(self, amount: typing.Any, unit: str = "points"):
+        _runcmd(f"experience set {self._target_str} {amount} {unit}")
+
+    def set_levels(self, levels: typing.Any):
+        self.set(levels, unit="levels")
+
+    def query(self, unit: str = "points"):
+        from .score import score
+        from .core import addr
+        from .. import context as ctx
+        dest = score(addr=f"#xp_{ctx.next_temp_id()}")
+        _runcmd(f"execute store result score {addr(dest)} run experience query {self._target_str} {unit}")
+        return dest
+
+
+class _EntityRide:
+    def __init__(self, target_str: str):
+        self._target_str = target_str
+
+    def mount(self, vehicle: typing.Union[str, selector]):
+        _runcmd(f"ride {self._target_str} mount {vehicle}")
+
+    def dismount(self):
+        _runcmd(f"ride {self._target_str} dismount")
+
+
 class selector(Generic[T]):
     def __init__(self, target: str):
         self._target_str = target
@@ -136,6 +187,18 @@ class selector(Generic[T]):
         from .item import InventoryAccessor
         return InventoryAccessor(self._target_str)
 
+    @property
+    def effect(self):
+        return _EntityEffect(self._target_str)
+
+    @property
+    def xp(self):
+        return _EntityXP(self._target_str)
+
+    @property
+    def ride(self):
+        return _EntityRide(self._target_str)
+
     def __getitem__(self, item):
         item_str = str(item)
         if item_str == "mainhand":
@@ -144,6 +207,12 @@ class selector(Generic[T]):
             return self.offhand
         if item_str == "inventory":
             return self.inventory
+        if item_str == "effect":
+            return self.effect
+        if item_str == "xp":
+            return self.xp
+        if item_str == "ride":
+            return self.ride
         return self.__getattr__(item_str)
 
     def __with__(self, body_func):
@@ -314,6 +383,23 @@ class selector(Generic[T]):
 
     def teleport(self, target):
         _runcmd(f"teleport {self._target_str} {target}")
+
+    def damage(self, amount: typing.Any, damage_type: str = "generic", by: typing.Optional[typing.Union[str, selector]] = None, from_pos: typing.Optional[str] = None):
+        cmd = f"damage {self._target_str} {amount} {damage_type}"
+        if by is not None:
+            cmd += f" by {by}"
+        elif from_pos is not None:
+            cmd += f" at {from_pos}"
+        _runcmd(cmd)
+
+    def playsound(self, sound: str, channel: str = "master", pos: str = "~ ~ ~", volume: float = 1.0, pitch: float = 1.0, min_volume: float = 0.0):
+        if min_volume > 0.0:
+            _runcmd(f"playsound {sound} {channel} {self._target_str} {pos} {volume} {pitch} {min_volume}")
+        else:
+            _runcmd(f"playsound {sound} {channel} {self._target_str} {pos} {volume} {pitch}")
+
+    def gamemode(self, mode: str):
+        _runcmd(f"gamemode {mode} {self._target_str}")
 
     def __branch__(self, invert=False):
         keyword = "unless" if invert else "if"
