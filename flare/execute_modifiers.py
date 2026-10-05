@@ -25,6 +25,10 @@ class InlineCondition:
             raise ValueError(f"Cannot invert condition: {cond}")
         return self.fragments
 
+    def __invert__(self):
+        inverted = self.__branch__(invert=True)
+        return InlineCondition(inverted[0], invert_str=self.fragments[0])
+
 
 class ExecuteChain:
     def __init__(self, prefix: str = "execute"):
@@ -522,16 +526,36 @@ class stopwatch:
     def __init__(self, id: str):
         self.id = id
 
-    def __rin__(self, container):
-        if isinstance(container, tuple):
-            a, b = container
+    def _format_range(self, val):
+        if isinstance(val, tuple):
+            a, b = val
             if a is None:
-                rng = f"..{b}"
+                return f"..{b}"
             elif b is None:
-                rng = f"{a}.."
+                return f"{a}.."
             elif a == b:
-                rng = f"{a}"
+                return f"{a}"
             else:
-                rng = f"{a}..{b}"
+                return f"{a}..{b}"
+        elif isinstance(val, (int, float)):
+            return f"{int(val)}"
+        elif isinstance(val, range):
+            start = val.start
+            stop = val.stop - 1 if val.step == 1 else val.stop
+            return f"{start}..{stop}"
+        return None
+
+    def __rin__(self, container):
+        rng = self._format_range(container)
+        if rng is not None:
             return InlineCondition(f"if stopwatch {self.id} {rng}")
         return NotImplemented
+
+    def __in__(self, item):
+        rng = self._format_range(item)
+        if rng is not None:
+            return InlineCondition(f"if stopwatch {self.id} {rng}")
+        return NotImplemented
+
+    def __contains__(self, item):
+        return self._format_range(item) is not None

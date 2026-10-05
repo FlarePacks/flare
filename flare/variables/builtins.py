@@ -49,6 +49,17 @@ class flare_range:
             return iter(self._native)
         raise TypeError("Cannot iterate over a dynamic scoreboard range in Python.")
 
+    def __in__(self, item):
+        if hasattr(item, "__rin__"):
+            return item.__rin__(self)
+        return NotImplemented
+
+    def __contains__(self, item):
+        res = self.__in__(item)
+        if res is not NotImplemented:
+            return res
+        return False
+
     def __for__(self, body_func, orelse_func=None, has_break=False, has_continue=False):
         from ..control_flow import _flare_for
         from .. import context as ctx

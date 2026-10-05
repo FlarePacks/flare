@@ -306,11 +306,49 @@ class FlareValue(ABC, metaclass=FlareClassMeta):
     def __rtruediv__(self, other):
         return BinaryOp(other, self, "truediv")
 
+    def __floordiv__(self, other):
+        return BinaryOp(self, other, "floordiv")
+
+    def __rfloordiv__(self, other):
+        return BinaryOp(other, self, "floordiv")
+
+    def __ifloordiv__(self, other):
+        if hasattr(self, "__idiv__"):
+            return self.__idiv__(other)
+        raise UnsupportedOperandError(self, "//=", other)
+
     def __mod__(self, other):
         return BinaryOp(self, other, "mod")
 
     def __rmod__(self, other):
         return BinaryOp(other, self, "mod")
+
+    def __pow__(self, other):
+        return BinaryOp(self, other, "pow")
+
+    def __rpow__(self, other):
+        return BinaryOp(other, self, "pow")
+
+    def __ipow__(self, other):
+        raise UnsupportedOperandError(self, "**=", other)
+
+    def __lshift__(self, other):
+        return BinaryOp(self, other, "lshift")
+
+    def __rlshift__(self, other):
+        return BinaryOp(other, self, "lshift")
+
+    def __ilshift__(self, other):
+        raise UnsupportedOperandError(self, "<<=", other)
+
+    def __rshift__(self, other):
+        return BinaryOp(self, other, "rshift")
+
+    def __rrshift__(self, other):
+        return BinaryOp(other, self, "rshift")
+
+    def __irshift__(self, other):
+        raise UnsupportedOperandError(self, ">>=", other)
 
     def __bool__(self):
         raise TypeError(

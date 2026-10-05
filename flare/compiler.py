@@ -255,8 +255,11 @@ def merge_score_match_conditions(conds: list[str]) -> list[str]:
 
     result = []
     for score_addr, (low, high) in score_ranges.items():
-        r_fmt = format_range(low, high)
-        result.append(f"if score {score_addr} matches {r_fmt}")
+        if low > high:
+            result.append("if score 0 __flare__constant__ matches 1")
+        else:
+            r_fmt = format_range(low, high)
+            result.append(f"if score {score_addr} matches {r_fmt}")
 
     return result + other_conds
 

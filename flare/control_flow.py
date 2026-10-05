@@ -22,6 +22,12 @@ class ScoreIf:
             return ScoreIf([self, other])
         return ScoreIf([*self.t, other])
 
+    def __invert__(self):
+        if hasattr(self, "invert"):
+            return self.invert()
+        from .variables.core import UnaryOp
+        return UnaryOp(self, "not")
+
     def then(self, s: Callable):
         commands = []
         file_len = len(ctx.files[ctx.current_file])

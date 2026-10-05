@@ -22,3 +22,6 @@ class _Storage:
     def __setitem__(self, key, value):
         target = self[key]
         target[...] = value
+
+    def __call__(self, item):
+        return self[item]

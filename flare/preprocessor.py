@@ -188,6 +188,7 @@ class FlareTransformer(ast.NodeTransformer):
 
         first_if = None
         current_if = None
+        fallback_body = None
 
         for case in node.cases:
             body = list(case.body)
@@ -208,6 +209,8 @@ class FlareTransformer(ast.NodeTransformer):
             if cond is None:
                 if current_if is not None:
                     current_if.orelse = body
+                else:
+                    fallback_body = body
                 break
             else:
                 if_node = ast.If(test=cond, body=body, orelse=[])
@@ -219,7 +222,15 @@ class FlareTransformer(ast.NodeTransformer):
                 current_if = if_node
 
         if first_if is None:
-            return [subj_assign] + (current_if.orelse if current_if else [])
+            transformed_body = []
+            if fallback_body is not None:
+                for b in fallback_body:
+                    res = self.visit(b)
+                    if isinstance(res, list):
+                        transformed_body.extend(res)
+                    else:
+                        transformed_body.append(res)
+            return [subj_assign] + transformed_body
 
         self.generic_visit(subj_assign)
         transformed_if = self.visit_If(first_if)
@@ -461,7 +472,7 @@ class FlareTransformer(ast.NodeTransformer):
                 ast.copy_location(new_assign, node)
                 return new_assign
 
-            elif isinstance(node.targets[0], ast.Tuple):
+            elif isinstance(node.targets[0], (ast.Tuple, ast.List)):
                 tmp_name = self.gen_name()
                 is_local_val = self.in_flare_func
 
@@ -498,7 +509,17 @@ class FlareTransformer(ast.NodeTransformer):
         self.generic_visit(node)
         if isinstance(node.target, ast.Name):
             var_name = node.target.id
-            op_map = {ast.Add: "Add", ast.Sub: "Sub", ast.Mult: "Mult", ast.Div: "Div", ast.Mod: "Mod"}
+            op_map = {
+                ast.Add: "Add",
+                ast.Sub: "Sub",
+                ast.Mult: "Mult",
+                ast.Div: "Div",
+                ast.FloorDiv: "FloorDiv",
+                ast.Mod: "Mod",
+                ast.Pow: "Pow",
+                ast.LShift: "LShift",
+                ast.RShift: "RShift",
+            }
             if type(node.op) in op_map:
                 method = op_map[type(node.op)]
                 call_expr = ast.Call(func=ast.Name(id="_flare_aug_assign", ctx=ast.Load()),
@@ -1455,12 +1476,26 @@ def preprocess_minecraft_commands(source: str) -> str:
                 i = matching_bracket_i + 1
                 continue
 
-        if tok.type == tokenize.NAME and tok.string == "storage":
+        prev_tok = None
+        for prev_j in range(i - 1, -1, -1):
+            if tokens[prev_j].type not in (tokenize.NL, tokenize.COMMENT, tokenize.INDENT, tokenize.DEDENT):
+                prev_tok = tokens[prev_j]
+                break
+
+        is_attr_or_keyword = (
+            prev_tok is not None and (
+                (prev_tok.type == tokenize.OP and prev_tok.string == ".") or
+                (prev_tok.type == tokenize.NAME and prev_tok.string in ("import", "from", "def", "class", "as"))
+            )
+        )
+
+        if not is_attr_or_keyword and tok.type == tokenize.NAME and tok.string == "storage":
             next_idx = i + 1
             if next_idx < len(tokens):
                 first_tok = tokens[next_idx]
                 if first_tok.line == tok.line and first_tok.start > tok.end:
-                    if first_tok.type in (tokenize.NAME, tokenize.NUMBER, tokenize.STRING) or (
+                    if (first_tok.type == tokenize.NAME and first_tok.string not in PYTHON_KEYWORDS) or \
+                            first_tok.type in (tokenize.NUMBER, tokenize.STRING) or (
                             first_tok.type == tokenize.OP and first_tok.string in ("!", "-", "+", "_")):
                         target_tokens = [first_tok]
                         target_end = first_tok.end
@@ -1516,7 +1551,7 @@ def preprocess_minecraft_commands(source: str) -> str:
                         i = scan
                         continue
 
-        if tok.type == tokenize.NAME and tok.string == "entity":
+        if not is_attr_or_keyword and tok.type == tokenize.NAME and tok.string == "entity":
             next_idx = i + 1
             if next_idx < len(tokens):
                 first_tok = tokens[next_idx]
@@ -1586,7 +1621,7 @@ def preprocess_minecraft_commands(source: str) -> str:
                             i = scan
                             continue
 
-        if tok.type == tokenize.NAME and tok.string == "block":
+        if not is_attr_or_keyword and tok.type == tokenize.NAME and tok.string == "block":
             next_idx = i + 1
             if next_idx < len(tokens):
                 first_tok = tokens[next_idx]

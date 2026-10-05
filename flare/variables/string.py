@@ -83,6 +83,27 @@ class NBTStringSlice(FlareValue):
             item_stop._compile_into(t)
             item_stop = t
 
+        # Normalize negative slice indices so Minecraft's set string never sees negative offsets
+        if getattr(string_obj, "_value_to_set", None) is not None and isinstance(string_obj._value_to_set, (str, list)):
+            known_len = len(string_obj._value_to_set)
+            if item_start is not None and isinstance(item_start, int) and item_start < 0:
+                item_start = max(0, known_len + item_start)
+            if item_stop is not None and isinstance(item_stop, int) and item_stop < 0:
+                item_stop = max(0, known_len + item_stop)
+        elif (item_start is not None and isinstance(item_start, int) and item_start < 0) or \
+             (item_stop is not None and isinstance(item_stop, int) and item_stop < 0):
+            str_len = len(string_obj)
+            if item_start is not None and isinstance(item_start, int) and item_start < 0:
+                st_score = score()
+                st_score[...] = str_len + item_start
+                _runcmd(f"execute if score {addr(st_score)} matches ..-1 run scoreboard players set {addr(st_score)} 0")
+                item_start = st_score
+            if item_stop is not None and isinstance(item_stop, int) and item_stop < 0:
+                sp_score = score()
+                sp_score[...] = str_len + item_stop
+                _runcmd(f"execute if score {addr(sp_score)} matches ..-1 run scoreboard players set {addr(sp_score)} 0")
+                item_stop = sp_score
+
         start_is_dynamic = hasattr(item_start, "_addr")
         stop_is_dynamic = hasattr(item_stop, "_addr")
 

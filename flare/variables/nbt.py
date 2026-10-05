@@ -1079,6 +1079,8 @@ class nbt(FlareValue, NBTStringMethods):
 
         if self.is_number():
             raise TypeError("Cannot chain path on NBT numbers")
+        if isinstance(item, score) and not getattr(item, "_is_macro_param", False) and not hasattr(item, "_varid"):
+            return DynamicNBTIndex(self, item)
         if isinstance(item, (int, score)) or getattr(item, "_is_macro_param", False):
             idx_str = f"$({item._varid})" if isinstance(item, score) and hasattr(item, "_varid") else str(item)
             new_path = f"{self._path}[{idx_str}]"
@@ -1689,10 +1691,13 @@ class nbt(FlareValue, NBTStringMethods):
             return _number_div(self, other)
         raise UnsupportedOperandError(self, "/=", other)
 
+    __ifloordiv__ = __idiv__
+    __itruediv__ = __idiv__
+
     def __imod__(self, other):
         if self.is_number():
             return _number_mod(self, other)
-        raise UnsupportedOperandError(self, "/=", other)
+        raise UnsupportedOperandError(self, "%=", other)
 
     def __imax__(self, other):
         self._check_addr()
@@ -2131,6 +2136,89 @@ class nbt(FlareValue, NBTStringMethods):
         self._check_addr()
         _runcmd(f"data remove {addr(self)}")
         return self
+
+
+class DynamicNBTIndex(nbt):
+    def __init__(self, source_nbt: nbt, index_score: score):
+        self._source_nbt = source_nbt
+        self._index_score = index_score
+        self._target_type = source_nbt._target_type
+        self._target = source_nbt._target
+        self._path = source_nbt._path
+        self._addr = None
+        self._value_to_set = None
+        self._type = None
+        self._schema_node = None
+        self._is_resolving = False
+
+    def _best_leaf(self):
+        return self
+
+    def _alloc_temp(self, prefix="#temp", like=None):
+        return nbt(addr=f"{ctx.temp_storage} dyn_idx_{ctx.next_temp_id()}")
+
+    def _compile_into(self, dest):
+        dest._check_addr()
+        self._source_nbt._check_addr()
+        self._index_score._check_addr()
+        _id = ctx.next_temp_id()
+        macro_args = nbt(addr=f"{ctx.temp_storage} __dyn_idx_args_{_id}")
+        macro_args["index"] = self._index_score
+
+        src_path = f"{self._source_nbt._path}[$(index)]" if self._source_nbt._path else "[$(index)]"
+        src_target = f"{self._source_nbt._target_type} {self._source_nbt._target} {src_path}".strip()
+
+        def macro_generator(*_):
+            if isinstance(dest, score):
+                _runcmd(f"$execute store result score {addr(dest)} run data get {src_target}")
+            else:
+                _runcmd(f"$data modify {addr(dest)} set from {src_target}")
+
+        ctx._invoke_stdlib(f"__flare_stdlib__:__flare_dyn_get_{_id}", macro_generator, with_=macro_args)
+        return dest
+
+    def _check_addr(self):
+        if self._addr is None and not getattr(self, "_is_resolving", False):
+            self._is_resolving = True
+            temp_addr = f"flare:temp dyn_{ctx.next_temp_id()}"
+            self._parse_addr(temp_addr)
+            self._compile_into(self)
+            self._is_resolving = False
+        return self._addr
+
+    def __iset__(self, value):
+        self._source_nbt._check_addr()
+        self._index_score._check_addr()
+        _id = ctx.next_temp_id()
+        macro_args = nbt(addr=f"{ctx.temp_storage} __dyn_idx_args_{_id}")
+        macro_args["index"] = self._index_score
+
+        src_path = f"{self._source_nbt._path}[$(index)]" if self._source_nbt._path else "[$(index)]"
+        dest_target = f"{self._source_nbt._target_type} {self._source_nbt._target} {src_path}".strip()
+
+        def macro_generator(*_):
+            if isinstance(value, score):
+                value._check_addr()
+                _runcmd(f"$execute store result {dest_target} int 1 run scoreboard players get {addr(value)}")
+            elif isinstance(value, nbt):
+                value._check_addr()
+                _runcmd(f"$data modify {dest_target} set from {addr(value)}")
+            elif isinstance(value, (int, float, str, bool, list, dict)):
+                from .snbt import snbt
+                val_snbt = snbt(value)
+                _runcmd(f"$data modify {dest_target} set value {val_snbt}")
+            else:
+                temp = nbt(addr=f"{ctx.temp_storage} __dyn_val_{_id}")
+                temp[...] = value
+                _runcmd(f"$data modify {dest_target} set from {addr(temp)}")
+
+        ctx._invoke_stdlib(f"__flare_stdlib__:__flare_dyn_set_{_id}", macro_generator, with_=macro_args)
+        return self
+
+    def __icopy__(self, varid: str, is_recursive: bool = False):
+        temp = nbt(addr=f"flare:temp {varid}")
+        self._compile_into(temp)
+        return temp
 
 
 class stack(nbt):

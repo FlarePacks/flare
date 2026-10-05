@@ -545,6 +545,130 @@ class score(FlareValue):
             return self
         return self._try_binary("__idiv__", "/=", other, (float, int, score, nbt))
 
+    __ifloordiv__ = __idiv__
+    __itruediv__ = __idiv__
+
+    def __ipow__(self, other):
+        self._check_writable()
+        if isinstance(other, (int, float)) and int(other) == other:
+            p = int(other)
+            if p < 0:
+                _runcmd(f"scoreboard players set {addr(self)} 0")
+                return self
+            if p == 0:
+                val = int(round(1.0 / self._multiplier))
+                _runcmd(f"scoreboard players set {addr(self)} {val}")
+                return self
+            if p == 1:
+                return self
+            if p == 2:
+                temp = self._alloc_temp()
+                temp[...] = self
+                self *= temp
+                return self
+            base = self._alloc_temp()
+            base[...] = self
+            res = self._alloc_temp()
+            res_val = int(round(1.0 / self._multiplier))
+            _runcmd(f"scoreboard players set {addr(res)} {res_val}")
+            while p > 0:
+                if p & 1:
+                    res *= base
+                p >>= 1
+                if p > 0:
+                    base *= base
+            self[...] = res
+            return self
+
+        if isinstance(other, (score, nbt)):
+            other._check_addr()
+            base = self._alloc_temp()
+            base[...] = self
+            exp = score(addr=f"#pow_exp_{ctx.next_temp_id()}")
+            exp[...] = other
+            res = self._alloc_temp()
+            res_val = int(round(1.0 / self._multiplier))
+            _runcmd(f"scoreboard players set {addr(res)} {res_val}")
+
+            pow_func = ctx.get_generated_func_name("pow")
+            mod2 = score(addr=f"#pow_mod2_{ctx.next_temp_id()}")
+            with ctx.push_context(pow_func):
+                _runcmd(f"scoreboard players operation {addr(mod2)} = {addr(exp)}")
+                _runcmd(f"scoreboard players operation {addr(mod2)} %= {addr(getscore(2))}")
+                _runcmd(f"execute unless score {addr(mod2)} matches 0 run scoreboard players operation {addr(res)} *= {addr(base)}")
+                _runcmd(f"scoreboard players operation {addr(base)} *= {addr(base)}")
+                _runcmd(f"scoreboard players operation {addr(exp)} /= {addr(getscore(2))}")
+                _runcmd(f"execute if score {addr(exp)} matches 1.. run function {pow_func}")
+
+            _runcmd(f"execute if score {addr(exp)} matches 1.. run function {pow_func}")
+            _runcmd(f"execute if score {addr(exp)} matches ..-1 run scoreboard players set {addr(res)} 0")
+            self[...] = res
+            return self
+
+        return self._try_binary("__ipow__", "**=", other, (float, int, score, nbt))
+
+    def __ilshift__(self, other):
+        self._check_writable()
+        if isinstance(other, int):
+            if other < 0:
+                raise ValueError("Negative shift count")
+            if other == 0:
+                return self
+            factor = 1 << other
+            _runcmd(f"scoreboard players operation {addr(self)} *= {addr(getscore(factor))}")
+            return self
+        if isinstance(other, score):
+            pow2 = score(1)
+            pow2 **= other
+            self *= pow2
+            return self
+        return self._try_binary("__ilshift__", "<<=", other, (int, score))
+
+    def __irshift__(self, other):
+        self._check_writable()
+        if isinstance(other, int):
+            if other < 0:
+                raise ValueError("Negative shift count")
+            if other == 0:
+                return self
+            factor = 1 << other
+            _runcmd(f"scoreboard players operation {addr(self)} /= {addr(getscore(factor))}")
+            return self
+        if isinstance(other, score):
+            pow2 = score(1)
+            pow2 **= other
+            self /= pow2
+            return self
+        return self._try_binary("__irshift__", ">>=", other, (int, score))
+
+    def __rin__(self, container):
+        from ..control_flow import ScoreIfMatches
+        import builtins
+        from .builtins import flare_range
+        if isinstance(container, flare_range):
+            if not container.is_flare:
+                container = container._native
+            else:
+                return NotImplemented
+        if isinstance(container, builtins.range):
+            if container.step != 1:
+                return NotImplemented
+            if container.start >= container.stop:
+                from ..execute_modifiers import InlineCondition
+                return InlineCondition("if score 0 __flare__constant__ matches 1")
+            return ScoreIfMatches(self, (container.start, container.stop - 1))
+        elif isinstance(container, tuple) and len(container) == 2:
+            return ScoreIfMatches(self, container)
+        elif isinstance(container, (int, float, str)):
+            return ScoreIfMatches(self, container)
+        return NotImplemented
+
+    def __in__(self, item):
+        return self.__rin__(item)
+
+    def __contains__(self, item):
+        return self.__rin__(item) is not NotImplemented
+
     def __imod__(self, other):
         self._check_writable()
         temp = score(addr="#mod0")

@@ -26,6 +26,11 @@ def randint(a, b):
 
 
 def choice(seq):
+    if isinstance(seq, (list, tuple)):
+        _id = ctx.next_temp_id()
+        temp_list = nbt(addr=f"{ctx.temp_storage} __choice_{_id}")
+        temp_list[...] = list(seq)
+        return temp_list[randint(0, len(seq) - 1)]
     return seq[randint(0, len(seq) - 1)]
 
 
