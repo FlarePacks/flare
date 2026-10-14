@@ -25,6 +25,9 @@ class FlareOptions(BaseModel):
     system_command_validation: Optional[Literal["none", "warning", "strict"]] = None
     minecraft_version: Optional[str] = None
     type_narrowing: Optional[Literal["none", "warning", "strict"]] = None
+    nbt_schema_missing: Optional[Literal["ignore", "warning", "error", "strict", "none"]] = None
+    optimize: Optional[bool] = None
+    no_cache: Optional[bool] = None
 
 
 def beet_default(ctx: Context) -> None:
@@ -33,7 +36,7 @@ def beet_default(ctx: Context) -> None:
 
 @configurable(validator=FlareOptions)
 def flare(ctx: Context, opts: FlareOptions) -> None:
-    if opts.path:
+    if getattr(opts, "path", None):
         entry = (ctx.directory / opts.path).resolve()
     else:
         entry = _find_entry(ctx)
@@ -51,27 +54,37 @@ def flare(ctx: Context, opts: FlareOptions) -> None:
         with open(root_flare_json) as fh:
             cli_overrides.update(json.load(fh))
 
-    if opts.namespace is not None:
+    if getattr(opts, "namespace", None) is not None:
         cli_overrides["namespace"] = opts.namespace
-    if opts.pack_format is not None:
+    if getattr(opts, "pack_format", None) is not None:
         cli_overrides["pack_format"] = opts.pack_format
-    if opts.description is not None:
+    if getattr(opts, "description", None) is not None:
         cli_overrides["description"] = opts.description
-    if opts.validation is not None:
+    if getattr(opts, "validation", None) is not None:
         cli_overrides["validation_level"] = opts.validation
-    if opts.system_command_validation is not None:
+    if getattr(opts, "system_command_validation", None) is not None:
         cli_overrides["system_command_validation"] = opts.system_command_validation
-    if opts.minecraft_version is not None:
+    if getattr(opts, "minecraft_version", None) is not None:
         cli_overrides["minecraft_version"] = opts.minecraft_version
-    if opts.nbt_schema_missing is not None:
+    if getattr(opts, "nbt_schema_missing", None) is not None:
         cli_overrides["nbt_schema_missing"] = opts.nbt_schema_missing
-    if opts.type_narrowing is not None:
+    if getattr(opts, "type_narrowing", None) is not None:
         cli_overrides["type_narrowing"] = opts.type_narrowing
+    if getattr(opts, "optimize", None) is not None:
+        cli_overrides["optimize"] = opts.optimize
+    if getattr(opts, "no_cache", None) is not None:
+        cli_overrides["no_cache"] = opts.no_cache
 
+    known_keys = {
+        "path", "namespace", "pack_format", "description", "validation",
+        "system_command_validation", "minecraft_version", "nbt_schema_missing",
+        "type_narrowing", "optimize", "no_cache",
+    }
     extra_opts = {}
-    for key, value in opts.dict(exclude_unset=True).items():
-        if key not in ("path", "namespace", "pack_format", "description", "validation", "system_command_validation",
-                       "minecraft_version", "nbt_schema_missing", "type_narrowing"):
+    dump_method = getattr(opts, "dict", None) or getattr(opts, "model_dump", None)
+    model_data = dump_method(exclude_unset=True) if dump_method else {}
+    for key, value in model_data.items():
+        if key not in known_keys:
             extra_opts[key] = value
 
     for key, value in extra_opts.items():
